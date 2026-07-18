@@ -16,7 +16,7 @@ import (
 )
 
 func lessonRequest(method, path, owner, body string) events.APIGatewayV2HTTPRequest {
-	req := events.APIGatewayV2HTTPRequest{RawPath: path, Body: body}
+	req := events.APIGatewayV2HTTPRequest{RawPath: path, Body: body, Headers: map[string]string{"Idempotency-Key": "lesson-test-key"}}
 	req.RequestContext.HTTP.Method = method
 	if owner != "" {
 		req.RequestContext.Authorizer = &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -97,6 +97,9 @@ func TestHandleLessonImport(t *testing.T) {
 		}
 		if importer.command.ContentHash == "" {
 			t.Error("ContentHash is empty")
+		}
+		if importer.command.IdempotencyKey != "lesson-test-key" {
+			t.Errorf("IdempotencyKey = %q", importer.command.IdempotencyKey)
 		}
 		if importer.command.Lesson.Exercises[0].Cloze == nil {
 			t.Error("cloze payload was not decoded")
@@ -329,7 +332,7 @@ func TestHandleLessonResult(t *testing.T) {
 		Score:       8,
 		MaxScore:    8,
 	}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder)
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

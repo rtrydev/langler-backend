@@ -8,9 +8,10 @@ import (
 )
 
 type LessonImportCommand struct {
-	Owner       string
-	ContentHash string
-	Lesson      lesson.Lesson
+	Owner          string
+	ContentHash    string
+	IdempotencyKey string
+	Lesson         lesson.Lesson
 }
 
 type StoredLesson struct {

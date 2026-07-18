@@ -151,10 +151,25 @@ type scriptItemPayload struct {
 
 func ownerFrom(req events.APIGatewayV2HTTPRequest) string {
 	authorizer := req.RequestContext.Authorizer
-	if authorizer == nil || authorizer.JWT == nil {
+	if authorizer == nil {
 		return ""
 	}
-	return authorizer.JWT.Claims["sub"]
+	if authorizer.JWT != nil {
+		return authorizer.JWT.Claims["sub"]
+	}
+	if owner, ok := authorizer.Lambda["owner"].(string); ok {
+		return owner
+	}
+	return ""
+}
+
+func header(req events.APIGatewayV2HTTPRequest, name string) string {
+	for key, value := range req.Headers {
+		if strings.EqualFold(key, name) {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func requestBody(req events.APIGatewayV2HTTPRequest) ([]byte, *events.APIGatewayV2HTTPResponse) {
@@ -179,6 +194,10 @@ func (h *Handler) handleLessonImport(ctx context.Context, req events.APIGatewayV
 	if owner == "" {
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}
+	idempotencyKey := header(req, "Idempotency-Key")
+	if len(idempotencyKey) < 8 || len(idempotencyKey) > 200 {
+		return errorJSON(http.StatusBadRequest, "Idempotency-Key must contain 8-200 characters")
+	}
 	body, errResp := requestBody(req)
 	if errResp != nil {
 		return *errResp
@@ -191,9 +210,10 @@ func (h *Handler) handleLessonImport(ctx context.Context, req events.APIGatewayV
 
 	hash := sha256.Sum256(body)
 	result, err := h.importer.Import(ctx, inbound.LessonImportCommand{
-		Owner:       owner,
-		ContentHash: hex.EncodeToString(hash[:]),
-		Lesson:      candidate,
+		Owner:          owner,
+		ContentHash:    hex.EncodeToString(hash[:]),
+		IdempotencyKey: idempotencyKey,
+		Lesson:         candidate,
 	})
 	if err != nil {
 		return lessonError(ctx, err)

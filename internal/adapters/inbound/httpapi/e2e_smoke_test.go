@@ -54,7 +54,7 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc)
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -157,6 +157,9 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	send := func(method, path, owner string, payload any) (int, map[string]any) {
 		t.Helper()
 		req := events.APIGatewayV2HTTPRequest{RawPath: path}
+		if path == "/lessons/import" {
+			req.Headers = map[string]string{"Idempotency-Key": "e2e-import-key"}
+		}
 		req.RequestContext.HTTP.Method = method
 		if owner != "" {
 			req.RequestContext.Authorizer = &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{

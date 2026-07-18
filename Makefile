@@ -1,4 +1,4 @@
-LAMBDAS := api
+LAMBDAS := api authorizer
 BUILD_DIR := build
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './build/*')
 

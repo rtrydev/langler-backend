@@ -63,10 +63,11 @@ tolerated and ignored). Payload shapes by type:
 5. **Reference integrity** (`application/lessons`): every `referencedVocab` /
    `referencedGrammar` id must exist in the reference partition for the lesson
    language (`BatchGetItem` on `REF#<lang>` / `VOCAB#<id>`·`GRAMMAR#<id>`).
-6. **Idempotency**: `PutItem` with `attribute_not_exists(PK)`; re-importing an
-   existing `lessonId` is a no-op that returns the stored lesson
-   (`"created": false`). The SHA-256 of the raw import body is stored as
-   `contentHash`.
+6. **Idempotency**: `POST /lessons/import` requires an `Idempotency-Key` header.
+   A transaction creates both the lesson and a user-scoped marker containing the
+   lesson id. Reusing the key returns that original lesson (`"created": false`),
+   even if the retry body changes. The SHA-256 of the raw import body is stored as
+   `contentHash`; the idempotency key itself is SHA-256 hashed before storage.
 
 Failures return `400 {"error": "lesson validation failed", "issues": [{"path",
 "message"}]}` with all issues collected in one pass, so the user can paste the
@@ -77,7 +78,8 @@ report back to their AI.
 | Record | PK | SK |
 |---|---|---|
 | Lesson | `USER#<cognito sub>` | `LESSON#<lessonId>` |
-| Lesson result | `USER#<cognito sub>` | `RESULT#<lessonId>#<completed timestamp>#<attemptId>` |
+| Lesson result | `USER#<owner>` | `RESULT#<lessonId>#<completed timestamp>#<attemptId>` |
+| Import marker | `USER#<owner>` | `IDEMPOTENCY#<sha256(key)>` |
 
 Items store the full lesson document under `dynamodbav` attributes plus
 `createdAt` (RFC 3339) and `contentHash`. Listing is a key-scoped `Query`
@@ -95,8 +97,10 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   demands a grounded short story; `foundational` removes it. With
   `includeReference` (default true) a slice of level-matched vocab and grammar
   with their reference ids is embedded.
-- `POST /lessons/import` — validate and store a lesson document. `201` with a
-  summary on first import, `200` with `"created": false` on replay.
+- `POST /lessons/import` — validate and store a lesson document with an
+  `Idempotency-Key` header. `201` with a summary on first import, `200` with
+  `"created": false` on replay. The machine API exposes this same path through
+  the token owner injected by its Lambda authorizer.
 - `GET /lessons?limit&cursor` — summaries (`{"items": [...], "nextCursor"}`).
 - `GET /lessons/{id}` — the full stored document plus `createdAt`.
 - `DELETE /lessons/{id}` — `204`; `404` if absent.
