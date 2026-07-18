@@ -13,6 +13,7 @@ var (
 	ErrInvalidTopic      = errors.New("topic must be lowercase letters, digits, or hyphens")
 	ErrInvalidCursor     = errors.New("cursor is not a valid pagination token")
 	ErrLevelWithoutType  = errors.New("script level filter requires a script type")
+	ErrStorageFailure    = errors.New("reference storage failed")
 )
 
 var (

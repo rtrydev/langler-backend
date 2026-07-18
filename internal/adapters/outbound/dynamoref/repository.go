@@ -55,7 +55,7 @@ func (r *Repository) Vocab(ctx context.Context, filter outbound.VocabFilter) (ou
 
 	var items []vocabItem
 	if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
-		return outbound.VocabPage{}, fmt.Errorf("unmarshal vocab items: %w", err)
+		return outbound.VocabPage{}, fmt.Errorf("%w: unmarshal vocab items: %v", domain.ErrStorageFailure, err)
 	}
 	entries := make([]domain.VocabEntry, 0, len(items))
 	for _, item := range items {
@@ -77,7 +77,7 @@ func (r *Repository) Grammar(ctx context.Context, filter outbound.GrammarFilter)
 
 	var items []grammarItem
 	if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
-		return outbound.GrammarPage{}, fmt.Errorf("unmarshal grammar items: %w", err)
+		return outbound.GrammarPage{}, fmt.Errorf("%w: unmarshal grammar items: %v", domain.ErrStorageFailure, err)
 	}
 	topics := make([]domain.GrammarTopic, 0, len(items))
 	for _, item := range items {
@@ -102,7 +102,7 @@ func (r *Repository) Scripts(ctx context.Context, filter outbound.ScriptFilter) 
 
 	var items []scriptItem
 	if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
-		return outbound.ScriptPage{}, fmt.Errorf("unmarshal script items: %w", err)
+		return outbound.ScriptPage{}, fmt.Errorf("%w: unmarshal script items: %v", domain.ErrStorageFailure, err)
 	}
 	glyphs := make([]domain.ScriptGlyph, 0, len(items))
 	for _, item := range items {
@@ -149,7 +149,7 @@ func (r *Repository) query(
 
 	out, err := r.client.Query(ctx, input)
 	if err != nil {
-		return rawPage{}, fmt.Errorf("query reference partition %s: %w", skPrefix, err)
+		return rawPage{}, fmt.Errorf("%w: query %s: %v", domain.ErrStorageFailure, skPrefix, err)
 	}
 
 	nextCursor, err := encodeCursor(out.LastEvaluatedKey)
@@ -175,7 +175,7 @@ func encodeCursor(lastKey map[string]types.AttributeValue) (string, error) {
 	}
 	encoded, err := json.Marshal(cursorKey{PK: pk.Value, SK: sk.Value})
 	if err != nil {
-		return "", fmt.Errorf("encode cursor: %w", err)
+		return "", fmt.Errorf("%w: encode cursor: %v", domain.ErrStorageFailure, err)
 	}
 	return base64.RawURLEncoding.EncodeToString(encoded), nil
 }
