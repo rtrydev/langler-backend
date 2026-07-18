@@ -65,9 +65,33 @@ type clozePayload struct {
 }
 
 type blankPayload struct {
-	Index  int    `json:"index"`
-	Answer string `json:"answer"`
-	Hint   string `json:"hint,omitempty"`
+	Index      int      `json:"index"`
+	Answer     string   `json:"answer"`
+	Alternates []string `json:"alternates,omitempty"`
+	Hint       string   `json:"hint,omitempty"`
+}
+
+type resultDocument struct {
+	AttemptID   string                   `json:"attemptId"`
+	StartedAt   string                   `json:"startedAt"`
+	CompletedAt string                   `json:"completedAt"`
+	Score       int                      `json:"score"`
+	MaxScore    int                      `json:"maxScore"`
+	AutoScore   int                      `json:"autoScore"`
+	AutoMax     int                      `json:"autoMax"`
+	SelfScore   int                      `json:"selfScore"`
+	SelfMax     int                      `json:"selfMax"`
+	Exercises   []exerciseResultDocument `json:"exercises"`
+}
+
+type exerciseResultDocument struct {
+	ExerciseID string `json:"exerciseId"`
+	Type       string `json:"type"`
+	Grading    string `json:"grading"`
+	Score      int    `json:"score"`
+	MaxScore   int    `json:"maxScore"`
+	Correct    int    `json:"correct"`
+	Total      int    `json:"total"`
 }
 
 type translationPayload struct {
@@ -268,6 +292,67 @@ func (h *Handler) handleLessonDelete(ctx context.Context, req events.APIGatewayV
 	return events.APIGatewayV2HTTPResponse{StatusCode: http.StatusNoContent}
 }
 
+func (h *Handler) handleLessonResult(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) events.APIGatewayV2HTTPResponse {
+	owner := ownerFrom(req)
+	if owner == "" {
+		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
+	}
+	body, errResp := requestBody(req)
+	if errResp != nil {
+		return *errResp
+	}
+	var doc resultDocument
+	if issue := decodeStrict(body, &doc, "$"); issue != nil {
+		return respondJSON(http.StatusBadRequest, validationResponse{Error: "lesson result validation failed", Issues: []issueDTO{*issue}})
+	}
+	startedAt, err := time.Parse(time.RFC3339Nano, doc.StartedAt)
+	if err != nil {
+		return errorJSON(http.StatusBadRequest, "startedAt must be an RFC 3339 timestamp")
+	}
+	completedAt, err := time.Parse(time.RFC3339Nano, doc.CompletedAt)
+	if err != nil {
+		return errorJSON(http.StatusBadRequest, "completedAt must be an RFC 3339 timestamp")
+	}
+	exercises := make([]lesson.ExerciseResult, 0, len(doc.Exercises))
+	for _, exercise := range doc.Exercises {
+		exercises = append(exercises, lesson.ExerciseResult{
+			ExerciseID: exercise.ExerciseID,
+			Type:       lesson.ExerciseType(exercise.Type),
+			Grading:    exercise.Grading,
+			Score:      exercise.Score,
+			MaxScore:   exercise.MaxScore,
+			Correct:    exercise.Correct,
+			Total:      exercise.Total,
+		})
+	}
+	result, err := h.results.Record(ctx, inbound.LessonResultCommand{
+		Owner: owner,
+		Result: lesson.Result{
+			AttemptID:   doc.AttemptID,
+			LessonID:    id,
+			StartedAt:   startedAt,
+			CompletedAt: completedAt,
+			Score:       doc.Score,
+			MaxScore:    doc.MaxScore,
+			AutoScore:   doc.AutoScore,
+			AutoMax:     doc.AutoMax,
+			SelfScore:   doc.SelfScore,
+			SelfMax:     doc.SelfMax,
+			Exercises:   exercises,
+		},
+	})
+	if err != nil {
+		return lessonError(ctx, err)
+	}
+	return respondJSON(http.StatusCreated, map[string]any{
+		"attemptId":   result.AttemptID,
+		"lessonId":    result.LessonID,
+		"completedAt": result.CompletedAt,
+		"score":       result.Score,
+		"maxScore":    result.MaxScore,
+	})
+}
+
 func lessonError(ctx context.Context, err error) events.APIGatewayV2HTTPResponse {
 	var validation *lesson.ValidationError
 	if errors.As(err, &validation) {
@@ -282,6 +367,10 @@ func lessonError(ctx context.Context, err error) events.APIGatewayV2HTTPResponse
 		return errorJSON(http.StatusNotFound, lesson.ErrNotFound.Error())
 	case errors.Is(err, lesson.ErrInvalidLessonID), errors.Is(err, lesson.ErrInvalidCursor):
 		return errorJSON(http.StatusBadRequest, err.Error())
+	case errors.Is(err, lesson.ErrInvalidResult):
+		return errorJSON(http.StatusBadRequest, err.Error())
+	case errors.Is(err, lesson.ErrAlreadyExists):
+		return errorJSON(http.StatusConflict, "lesson result already exists")
 	case errors.Is(err, lesson.ErrInvalidOwner):
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}
@@ -412,7 +501,7 @@ func decodeMessage(err error) string {
 func toClozeDomain(payload *clozePayload) *lesson.Cloze {
 	blanks := make([]lesson.Blank, 0, len(payload.Blanks))
 	for _, blank := range payload.Blanks {
-		blanks = append(blanks, lesson.Blank{Index: blank.Index, Answer: blank.Answer, Hint: blank.Hint})
+		blanks = append(blanks, lesson.Blank{Index: blank.Index, Answer: blank.Answer, Alternates: blank.Alternates, Hint: blank.Hint})
 	}
 	return &lesson.Cloze{Text: payload.Text, Blanks: blanks}
 }
@@ -590,7 +679,7 @@ func toExerciseDocument(exercise lesson.Exercise) exerciseDocument {
 	case exercise.Cloze != nil:
 		blanks := make([]blankPayload, 0, len(exercise.Cloze.Blanks))
 		for _, blank := range exercise.Cloze.Blanks {
-			blanks = append(blanks, blankPayload{Index: blank.Index, Answer: blank.Answer, Hint: blank.Hint})
+			blanks = append(blanks, blankPayload{Index: blank.Index, Answer: blank.Answer, Alternates: blank.Alternates, Hint: blank.Hint})
 		}
 		payload = clozePayload{Text: exercise.Cloze.Text, Blanks: blanks}
 	case exercise.Translation != nil:

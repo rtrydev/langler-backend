@@ -19,6 +19,7 @@ type Handler struct {
 	importer  inbound.LessonImporter
 	library   inbound.LessonLibrary
 	prompts   inbound.LessonPromptBuilder
+	results   inbound.LessonResultRecorder
 }
 
 func NewHandler(
@@ -27,6 +28,7 @@ func NewHandler(
 	importer inbound.LessonImporter,
 	library inbound.LessonLibrary,
 	prompts inbound.LessonPromptBuilder,
+	results inbound.LessonResultRecorder,
 ) (*Handler, error) {
 	if status == nil {
 		return nil, errors.New("status provider must not be nil")
@@ -43,7 +45,10 @@ func NewHandler(
 	if prompts == nil {
 		return nil, errors.New("lesson prompt builder must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts}, nil
+	if results == nil {
+		return nil, errors.New("lesson result recorder must not be nil")
+	}
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -66,6 +71,9 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleLessonImport(ctx, req), nil
 	case method == http.MethodGet && path == "/lessons":
 		return h.handleLessonList(ctx, req), nil
+	case method == http.MethodPost && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/lessons/"), "/results")
+		return h.handleLessonResult(ctx, req, id), nil
 	case method == http.MethodGet && strings.HasPrefix(path, "/lessons/"):
 		return h.handleLessonGet(ctx, req, strings.TrimPrefix(path, "/lessons/")), nil
 	case method == http.MethodDelete && strings.HasPrefix(path, "/lessons/"):

@@ -47,9 +47,36 @@ type clozeItem struct {
 }
 
 type blankItem struct {
-	Index  int    `dynamodbav:"index"`
-	Answer string `dynamodbav:"answer"`
-	Hint   string `dynamodbav:"hint,omitempty"`
+	Index      int      `dynamodbav:"index"`
+	Answer     string   `dynamodbav:"answer"`
+	Alternates []string `dynamodbav:"alternates,omitempty"`
+	Hint       string   `dynamodbav:"hint,omitempty"`
+}
+
+type resultItem struct {
+	PK          string               `dynamodbav:"PK"`
+	SK          string               `dynamodbav:"SK"`
+	AttemptID   string               `dynamodbav:"attemptId"`
+	LessonID    string               `dynamodbav:"lessonId"`
+	StartedAt   string               `dynamodbav:"startedAt"`
+	CompletedAt string               `dynamodbav:"completedAt"`
+	Score       int                  `dynamodbav:"score"`
+	MaxScore    int                  `dynamodbav:"maxScore"`
+	AutoScore   int                  `dynamodbav:"autoScore"`
+	AutoMax     int                  `dynamodbav:"autoMax"`
+	SelfScore   int                  `dynamodbav:"selfScore"`
+	SelfMax     int                  `dynamodbav:"selfMax"`
+	Exercises   []exerciseResultItem `dynamodbav:"exercises"`
+}
+
+type exerciseResultItem struct {
+	ExerciseID string `dynamodbav:"exerciseId"`
+	Type       string `dynamodbav:"type"`
+	Grading    string `dynamodbav:"grading"`
+	Score      int    `dynamodbav:"score"`
+	MaxScore   int    `dynamodbav:"maxScore"`
+	Correct    int    `dynamodbav:"correct"`
+	Total      int    `dynamodbav:"total"`
 }
 
 type translationItem struct {
