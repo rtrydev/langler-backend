@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
+	"github.com/rtrydev/langler-backend/internal/domain/lesson"
 	"github.com/rtrydev/langler-backend/internal/ports/inbound"
 )
 
@@ -88,6 +89,17 @@ type fakeLessonPromptBuilder struct {
 	query  inbound.LessonPromptQuery
 }
 
+type fakeLessonResultRecorder struct {
+	result  lesson.Result
+	err     error
+	command inbound.LessonResultCommand
+}
+
+func (f *fakeLessonResultRecorder) Record(_ context.Context, command inbound.LessonResultCommand) (lesson.Result, error) {
+	f.command = command
+	return f.result, f.err
+}
+
 func (f *fakeLessonPromptBuilder) Build(_ context.Context, query inbound.LessonPromptQuery) (inbound.LessonPrompt, error) {
 	f.query = query
 	return f.result, f.err
@@ -105,7 +117,7 @@ func getRequest(path string, params map[string]string) events.APIGatewayV2HTTPRe
 func newHandler(t *testing.T, status fakeStatusProvider, reference *fakeReferenceProvider) *httpapi.Handler {
 	t.Helper()
 
-	h, err := httpapi.NewHandler(status, reference, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
+	h, err := httpapi.NewHandler(status, reference, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -211,19 +223,23 @@ func TestNewHandlerRejectsNilDependencies(t *testing.T) {
 	importer := &fakeLessonImporter{}
 	library := &fakeLessonLibrary{}
 	prompts := &fakeLessonPromptBuilder{}
-	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}, importer, library, prompts); err == nil {
+	results := &fakeLessonResultRecorder{}
+	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}, importer, library, prompts, results); err == nil {
 		t.Fatal("NewHandler(nil status) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil, importer, library, prompts); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil, importer, library, prompts, results); err == nil {
 		t.Fatal("NewHandler(nil reference) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, nil, library, prompts); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, nil, library, prompts, results); err == nil {
 		t.Fatal("NewHandler(nil importer) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, nil, prompts); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, nil, prompts, results); err == nil {
 		t.Fatal("NewHandler(nil library) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, nil); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, nil, results); err == nil {
 		t.Fatal("NewHandler(nil prompts) error = nil")
+	}
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, nil); err == nil {
+		t.Fatal("NewHandler(nil results) error = nil")
 	}
 }

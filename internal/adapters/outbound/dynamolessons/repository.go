@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -122,6 +123,53 @@ func (r *Repository) Delete(ctx context.Context, owner, id string) error {
 			return domain.ErrNotFound
 		}
 		return fmt.Errorf("%w: delete lesson: %v", domain.ErrStorageFailure, err)
+	}
+	return nil
+}
+
+func (r *Repository) SaveResult(ctx context.Context, record outbound.ResultRecord) error {
+	result := record.Result
+	exercises := make([]exerciseResultItem, 0, len(result.Exercises))
+	for _, exercise := range result.Exercises {
+		exercises = append(exercises, exerciseResultItem{
+			ExerciseID: exercise.ExerciseID,
+			Type:       string(exercise.Type),
+			Grading:    exercise.Grading,
+			Score:      exercise.Score,
+			MaxScore:   exercise.MaxScore,
+			Correct:    exercise.Correct,
+			Total:      exercise.Total,
+		})
+	}
+	item, err := attributevalue.MarshalMap(resultItem{
+		PK:          "USER#" + record.Owner,
+		SK:          "RESULT#" + result.LessonID + "#" + result.CompletedAt.UTC().Format("20060102T150405.000000000Z") + "#" + result.AttemptID,
+		AttemptID:   result.AttemptID,
+		LessonID:    result.LessonID,
+		StartedAt:   result.StartedAt.UTC().Format(time.RFC3339Nano),
+		CompletedAt: result.CompletedAt.UTC().Format(time.RFC3339Nano),
+		Score:       result.Score,
+		MaxScore:    result.MaxScore,
+		AutoScore:   result.AutoScore,
+		AutoMax:     result.AutoMax,
+		SelfScore:   result.SelfScore,
+		SelfMax:     result.SelfMax,
+		Exercises:   exercises,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: marshal result: %v", domain.ErrStorageFailure, err)
+	}
+	_, err = r.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:           aws.String(r.table),
+		Item:                item,
+		ConditionExpression: aws.String("attribute_not_exists(PK)"),
+	})
+	if err != nil {
+		var conditionFailed *types.ConditionalCheckFailedException
+		if errors.As(err, &conditionFailed) {
+			return domain.ErrAlreadyExists
+		}
+		return fmt.Errorf("%w: put result: %v", domain.ErrStorageFailure, err)
 	}
 	return nil
 }

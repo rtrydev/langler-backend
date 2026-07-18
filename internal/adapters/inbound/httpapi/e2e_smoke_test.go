@@ -50,11 +50,11 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dynamolessons.NewRepository: %v", err)
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo)
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo)
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc)
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

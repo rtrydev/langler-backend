@@ -38,7 +38,7 @@ tolerated and ignored). Payload shapes by type:
 
 | Type | Payload |
 |---|---|
-| `cloze` | `{"text": "…{{1}}…", "blanks": [{"index": 1, "answer": "…", "hint"?}]}` — markers and blanks must match 1:1 |
+| `cloze` | `{"text": "…{{1}}…", "blanks": [{"index": 1, "answer": "…", "alternates"?: ["…"], "hint"?}]}` — markers and blanks must match 1:1 |
 | `translation` | `{"source": "…", "reference"?}` |
 | `ordering` | `{"items": ["…"], "translation"?}` — items in correct order, 2–20 |
 | `matching` | `{"pairs": [{"left": "…", "right": "…"}]}` — 2–20 pairs |
@@ -77,6 +77,7 @@ report back to their AI.
 | Record | PK | SK |
 |---|---|---|
 | Lesson | `USER#<cognito sub>` | `LESSON#<lessonId>` |
+| Lesson result | `USER#<cognito sub>` | `RESULT#<lessonId>#<completed timestamp>#<attemptId>` |
 
 Items store the full lesson document under `dynamodbav` attributes plus
 `createdAt` (RFC 3339) and `contentHash`. Listing is a key-scoped `Query`
@@ -99,3 +100,6 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
 - `GET /lessons?limit&cursor` — summaries (`{"items": [...], "nextCursor"}`).
 - `GET /lessons/{id}` — the full stored document plus `createdAt`.
 - `DELETE /lessons/{id}` — `204`; `404` if absent.
+- `POST /lessons/{id}/results` — validate and persist a completed attempt with
+  aggregate auto/self scores and a per-exercise breakdown. Result records are
+  user-scoped raw outcomes; no SRS schedule is created at this stage.

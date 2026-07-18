@@ -66,3 +66,12 @@ type LessonPrompt struct {
 type LessonPromptBuilder interface {
 	Build(ctx context.Context, query LessonPromptQuery) (LessonPrompt, error)
 }
+
+type LessonResultCommand struct {
+	Owner  string
+	Result lesson.Result
+}
+
+type LessonResultRecorder interface {
+	Record(ctx context.Context, command LessonResultCommand) (lesson.Result, error)
+}

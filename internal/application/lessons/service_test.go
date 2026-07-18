@@ -23,6 +23,7 @@ type fakeStore struct {
 	listErr error
 	deleted []string
 	delErr  error
+	results []outbound.ResultRecord
 }
 
 func (f *fakeStore) Save(_ context.Context, record outbound.LessonRecord) error {
@@ -52,6 +53,11 @@ func (f *fakeStore) Delete(_ context.Context, _, id string) error {
 		return f.delErr
 	}
 	f.deleted = append(f.deleted, id)
+	return nil
+}
+
+func (f *fakeStore) SaveResult(_ context.Context, record outbound.ResultRecord) error {
+	f.results = append(f.results, record)
 	return nil
 }
 
@@ -89,7 +95,7 @@ func (f *fakeReader) Scripts(_ context.Context, _ outbound.ScriptFilter) (outbou
 
 func newService(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader) *lessons.Service {
 	t.Helper()
-	svc, err := lessons.NewService(store, checker, reader)
+	svc, err := lessons.NewService(store, checker, reader, store)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -245,6 +251,35 @@ func TestDeleteDelegatesToStore(t *testing.T) {
 	}
 	if len(store.deleted) != 1 {
 		t.Fatalf("deleted = %v", store.deleted)
+	}
+}
+
+func TestRecordSavesValidatedPerUserResult(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{record: outbound.LessonRecord{Lesson: validLesson()}}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+	result := domain.Result{
+		AttemptID:   "11111111-1111-4111-8111-111111111111",
+		LessonID:    validLesson().ID,
+		StartedAt:   started,
+		CompletedAt: started.Add(time.Minute),
+		Score:       8,
+		MaxScore:    8,
+		AutoScore:   8,
+		AutoMax:     8,
+		Exercises: []domain.ExerciseResult{
+			{ExerciseID: "ex-1", Type: domain.TypeCloze, Grading: "auto", Score: 8, MaxScore: 8, Correct: 1, Total: 1},
+			{ExerciseID: "ex-2", Type: domain.TypeReading, Grading: "auto", Score: 0, MaxScore: 0, Correct: 1, Total: 1},
+		},
+	}
+
+	if _, err := svc.Record(context.Background(), inbound.LessonResultCommand{Owner: "user-1", Result: result}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if len(store.results) != 1 || store.results[0].Owner != "user-1" {
+		t.Fatalf("results = %+v", store.results)
 	}
 }
 

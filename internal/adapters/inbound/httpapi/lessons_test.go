@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts)
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -316,4 +316,29 @@ func TestHandleLessonGetAndDelete(t *testing.T) {
 			t.Fatalf("StatusCode = %d", resp.StatusCode)
 		}
 	})
+}
+
+func TestHandleLessonResult(t *testing.T) {
+	t.Parallel()
+
+	completed := time.Date(2026, 7, 18, 12, 1, 0, 0, time.UTC)
+	recorder := &fakeLessonResultRecorder{result: lesson.Result{
+		AttemptID:   "11111111-1111-4111-8111-111111111111",
+		LessonID:    "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		CompletedAt: completed,
+		Score:       8,
+		MaxScore:    8,
+	}}
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder)
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+	body := `{"attemptId":"11111111-1111-4111-8111-111111111111","startedAt":"2026-07-18T12:00:00Z","completedAt":"2026-07-18T12:01:00Z","score":8,"maxScore":8,"autoScore":8,"autoMax":8,"selfScore":0,"selfMax":0,"exercises":[{"exerciseId":"ex-1","type":"cloze","grading":"auto","score":8,"maxScore":8,"correct":1,"total":1}]}`
+	resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodPost, "/lessons/3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00/results", "user-1", body))
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("StatusCode = %d body %s", resp.StatusCode, resp.Body)
+	}
+	if recorder.command.Owner != "user-1" || recorder.command.Result.LessonID != "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00" {
+		t.Fatalf("command = %+v", recorder.command)
+	}
 }

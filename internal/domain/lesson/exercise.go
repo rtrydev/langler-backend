@@ -55,9 +55,10 @@ type Cloze struct {
 }
 
 type Blank struct {
-	Index  int
-	Answer string
-	Hint   string
+	Index      int
+	Answer     string
+	Alternates []string
+	Hint       string
 }
 
 type Translation struct {
@@ -128,6 +129,7 @@ const (
 	maxClozeTextLen     = 3000
 	maxBlanks           = 20
 	maxAnswerLen        = 120
+	maxAlternateAnswers = 10
 	maxHintLen          = 200
 	maxSentenceLen      = 1000
 	maxOrderingItems    = 20
@@ -269,6 +271,12 @@ func validateCloze(c *collector, path string, p *Cloze) {
 		declared[b.Index] = true
 		b.Answer = strings.TrimSpace(b.Answer)
 		c.text(blankPath+".answer", b.Answer, maxAnswerLen, true)
+		if len(b.Alternates) > maxAlternateAnswers {
+			c.add(blankPath+".alternates", "must contain at most %d alternate answers", maxAlternateAnswers)
+		}
+		for j, alternate := range b.Alternates {
+			c.text(fmt.Sprintf("%s.alternates[%d]", blankPath, j), alternate, maxAnswerLen, true)
+		}
 		c.text(blankPath+".hint", b.Hint, maxHintLen, false)
 		switch markers[b.Index] {
 		case 0:

@@ -27,6 +27,15 @@ type LessonStore interface {
 	Delete(ctx context.Context, owner, id string) error
 }
 
+type ResultRecord struct {
+	Owner  string
+	Result lesson.Result
+}
+
+type ResultStore interface {
+	SaveResult(ctx context.Context, record ResultRecord) error
+}
+
 type ReferenceChecker interface {
 	MissingVocab(ctx context.Context, language reference.Language, ids []string) ([]string, error)
 	MissingGrammar(ctx context.Context, language reference.Language, ids []string) ([]string, error)

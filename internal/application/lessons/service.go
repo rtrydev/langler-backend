@@ -21,10 +21,11 @@ type Service struct {
 	store   outbound.LessonStore
 	checker outbound.ReferenceChecker
 	reader  outbound.ReferenceReader
+	results outbound.ResultStore
 	now     func() time.Time
 }
 
-func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader) (*Service, error) {
+func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("lesson store must not be nil")
 	}
@@ -34,7 +35,10 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if reader == nil {
 		return nil, errors.New("reference reader must not be nil")
 	}
-	return &Service{store: store, checker: checker, reader: reader, now: time.Now}, nil
+	if results == nil {
+		return nil, errors.New("result store must not be nil")
+	}
+	return &Service{store: store, checker: checker, reader: reader, results: results, now: time.Now}, nil
 }
 
 func (s *Service) Import(ctx context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {
@@ -184,6 +188,24 @@ func (s *Service) Delete(ctx context.Context, query inbound.LessonQuery) error {
 		return domain.ErrInvalidLessonID
 	}
 	return s.store.Delete(ctx, query.Owner, query.ID)
+}
+
+func (s *Service) Record(ctx context.Context, command inbound.LessonResultCommand) (domain.Result, error) {
+	if command.Owner == "" {
+		return domain.Result{}, domain.ErrInvalidOwner
+	}
+	record, err := s.store.Get(ctx, command.Owner, command.Result.LessonID)
+	if err != nil {
+		return domain.Result{}, err
+	}
+	result, err := domain.NewResult(command.Result, record.Lesson)
+	if err != nil {
+		return domain.Result{}, err
+	}
+	if err := s.results.SaveResult(ctx, outbound.ResultRecord{Owner: command.Owner, Result: result}); err != nil {
+		return domain.Result{}, err
+	}
+	return result, nil
 }
 
 func storedLesson(record outbound.LessonRecord) inbound.StoredLesson {
