@@ -10,7 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
+	"github.com/rtrydev/langler-backend/internal/application/lessons"
 	"github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
 )
@@ -37,7 +39,9 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	repo, err := dynamoref.NewRepository(dynamodb.NewFromConfig(cfg), os.Getenv("TABLE_NAME"))
+	client := dynamodb.NewFromConfig(cfg)
+	table := os.Getenv("TABLE_NAME")
+	repo, err := dynamoref.NewRepository(client, table)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +49,14 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	lessonRepo, err := dynamolessons.NewRepository(client, table)
+	if err != nil {
+		return nil, err
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo)
+	if err != nil {
+		return nil, err
+	}
 
-	return httpapi.NewHandler(statusSvc, referenceSvc)
+	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc)
 }

@@ -1,6 +1,8 @@
 package dynamoref
 
 import (
+	"strings"
+
 	domain "github.com/rtrydev/langler-backend/internal/domain/reference"
 )
 
@@ -24,6 +26,7 @@ func (e *exampleItem) toDomain() *domain.Example {
 }
 
 type vocabItem struct {
+	SK       string       `dynamodbav:"SK"`
 	Headword string       `dynamodbav:"headword"`
 	Reading  string       `dynamodbav:"reading"`
 	Gloss    []string     `dynamodbav:"gloss"`
@@ -38,6 +41,7 @@ type vocabItem struct {
 
 func (v vocabItem) toDomain() domain.VocabEntry {
 	return domain.VocabEntry{
+		ID:            strings.TrimPrefix(v.SK, "VOCAB#"),
 		Headword:      v.Headword,
 		Reading:       v.Reading,
 		Gloss:         v.Gloss,
@@ -52,6 +56,7 @@ func (v vocabItem) toDomain() domain.VocabEntry {
 }
 
 type grammarItem struct {
+	SK          string       `dynamodbav:"SK"`
 	TopicID     string       `dynamodbav:"topicId"`
 	Name        string       `dynamodbav:"name"`
 	Level       string       `dynamodbav:"level"`
@@ -63,6 +68,7 @@ type grammarItem struct {
 
 func (g grammarItem) toDomain() domain.GrammarTopic {
 	return domain.GrammarTopic{
+		ID:          strings.TrimPrefix(g.SK, "GRAMMAR#"),
 		TopicID:     g.TopicID,
 		Name:        g.Name,
 		Level:       domain.Level(g.Level),

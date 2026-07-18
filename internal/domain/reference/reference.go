@@ -68,6 +68,7 @@ type Example struct {
 }
 
 type VocabEntry struct {
+	ID            string
 	Headword      string
 	Reading       string
 	Gloss         []string
@@ -81,6 +82,7 @@ type VocabEntry struct {
 }
 
 type GrammarTopic struct {
+	ID          string
 	TopicID     string
 	Name        string
 	Level       Level

@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
+	"github.com/rtrydev/langler-backend/internal/application/lessons"
 	appref "github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
 )
@@ -42,7 +46,15 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc)
+	lessonRepo, err := dynamolessons.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("dynamolessons.NewRepository: %v", err)
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo)
+	if err != nil {
+		t.Fatalf("lessons.NewService: %v", err)
+	}
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -140,5 +152,156 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 		if !seen[want] {
 			t.Errorf("core N5 word %s missing", want)
 		}
+	}
+
+	send := func(method, path, owner string, payload any) (int, map[string]any) {
+		t.Helper()
+		req := events.APIGatewayV2HTTPRequest{RawPath: path}
+		req.RequestContext.HTTP.Method = method
+		if owner != "" {
+			req.RequestContext.Authorizer = &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+					Claims: map[string]string{"sub": owner},
+				},
+			}
+		}
+		if payload != nil {
+			body, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("marshal payload: %v", err)
+			}
+			req.Body = string(body)
+		}
+		resp, err := h.Handle(ctx, req)
+		if err != nil {
+			t.Fatalf("Handle %s %s: %v", method, path, err)
+		}
+		var body map[string]any
+		if resp.Body != "" {
+			if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+				t.Fatalf("unmarshal %s %s: %v", method, path, err)
+			}
+		}
+		return resp.StatusCode, body
+	}
+
+	statusCode, prompt := send(http.MethodPost, "/lessons/prompt", "e2e-user", map[string]any{
+		"language":      "ja",
+		"level":         "N5",
+		"topic":         "a trip to the school",
+		"exerciseTypes": []string{"cloze", "reading"},
+	})
+	if statusCode != http.StatusOK {
+		t.Fatalf("prompt: status %d body %v", statusCode, prompt)
+	}
+	promptText, _ := prompt["prompt"].(string)
+	if !strings.Contains(promptText, "short_story") || !strings.Contains(promptText, "N5#") {
+		t.Fatalf("prompt missing story instructions or reference ids: %.400s", promptText)
+	}
+
+	vocabBody := call("/reference/vocab", map[string]string{"lang": "ja", "level": "N5", "limit": "1"})
+	vocabID := vocabBody["items"].([]any)[0].(map[string]any)["id"].(string)
+
+	lessonDoc := map[string]any{
+		"schemaVersion": "1.0",
+		"lessonId":      "7b6f7d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+		"language":      "ja",
+		"level":         "N5",
+		"title":         "E2E smoke lesson",
+		"readingStage":  "connected",
+		"exercises": []map[string]any{
+			{
+				"exerciseId":      "ex-1",
+				"type":            "cloze",
+				"prompt":          "Fill in the blank.",
+				"points":          4,
+				"referencedVocab": []string{vocabID},
+				"payload": map[string]any{
+					"text":   "わたしは{{1}}へ行きます。",
+					"blanks": []map[string]any{{"index": 1, "answer": "学校"}},
+				},
+			},
+			{
+				"exerciseId": "ex-2",
+				"type":       "reading",
+				"prompt":     "Read the story and answer.",
+				"points":     6,
+				"payload": map[string]any{
+					"genre":   "short_story",
+					"title":   "学校の一日",
+					"passage": "今日は学校へ行きました。友達と勉強しました。",
+					"questions": []map[string]any{
+						{
+							"question": "どこへ行きましたか。",
+							"kind":     "multiple_choice",
+							"options":  []string{"学校", "こうえん"},
+							"answer":   "学校",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	statusCode, imported := send(http.MethodPost, "/lessons/import", "e2e-user", lessonDoc)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("import: status %d body %v", statusCode, imported)
+	}
+	lessonID := imported["lessonId"].(string)
+	t.Cleanup(func() {
+		send(http.MethodDelete, "/lessons/"+lessonID, "e2e-user", nil)
+	})
+	if imported["created"] != true || imported["exerciseCount"].(float64) != 2 {
+		t.Fatalf("import response = %v", imported)
+	}
+
+	statusCode, replay := send(http.MethodPost, "/lessons/import", "e2e-user", lessonDoc)
+	if statusCode != http.StatusOK || replay["created"] != false {
+		t.Fatalf("duplicate import: status %d body %v", statusCode, replay)
+	}
+
+	badDoc := map[string]any{
+		"schemaVersion": "1.0",
+		"lessonId":      "8c7f8e4f-5b6c-4d7e-9fa0-1b2c3d4e5f60",
+		"language":      "ja",
+		"level":         "N5",
+		"title":         "Missing story",
+		"readingStage":  "connected",
+		"exercises": []map[string]any{
+			{
+				"exerciseId":      "ex-1",
+				"type":            "cloze",
+				"referencedVocab": []string{"N5#does-not-exist"},
+				"payload": map[string]any{
+					"text":   "わたしは{{1}}へ行きます。",
+					"blanks": []map[string]any{{"index": 1, "answer": "学校"}},
+				},
+			},
+		},
+	}
+	statusCode, rejected := send(http.MethodPost, "/lessons/import", "e2e-user", badDoc)
+	if statusCode != http.StatusBadRequest || rejected["issues"] == nil {
+		t.Fatalf("invalid import: status %d body %v", statusCode, rejected)
+	}
+
+	statusCode, list := send(http.MethodGet, "/lessons", "e2e-user", nil)
+	if statusCode != http.StatusOK || len(list["items"].([]any)) == 0 {
+		t.Fatalf("list: status %d body %v", statusCode, list)
+	}
+
+	statusCode, detail := send(http.MethodGet, "/lessons/"+lessonID, "e2e-user", nil)
+	if statusCode != http.StatusOK || detail["title"] != "E2E smoke lesson" {
+		t.Fatalf("get: status %d body %v", statusCode, detail)
+	}
+
+	if statusCode, _ = send(http.MethodGet, "/lessons/"+lessonID, "another-user", nil); statusCode != http.StatusNotFound {
+		t.Fatalf("cross-user get: status %d, want 404", statusCode)
+	}
+
+	if statusCode, _ = send(http.MethodDelete, "/lessons/"+lessonID, "e2e-user", nil); statusCode != http.StatusNoContent {
+		t.Fatalf("delete: status %d, want 204", statusCode)
+	}
+	if statusCode, _ = send(http.MethodGet, "/lessons/"+lessonID, "e2e-user", nil); statusCode != http.StatusNotFound {
+		t.Fatalf("get after delete: status %d, want 404", statusCode)
 	}
 }

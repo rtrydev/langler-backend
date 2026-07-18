@@ -48,6 +48,51 @@ func (f *fakeReferenceProvider) Scripts(_ context.Context, query inbound.ScriptQ
 	return f.scripts, f.err
 }
 
+type fakeLessonImporter struct {
+	result  inbound.LessonImportResult
+	err     error
+	command inbound.LessonImportCommand
+}
+
+func (f *fakeLessonImporter) Import(_ context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {
+	f.command = command
+	return f.result, f.err
+}
+
+type fakeLessonLibrary struct {
+	list      inbound.LessonListResult
+	stored    inbound.StoredLesson
+	err       error
+	listQuery inbound.LessonListQuery
+	query     inbound.LessonQuery
+}
+
+func (f *fakeLessonLibrary) List(_ context.Context, query inbound.LessonListQuery) (inbound.LessonListResult, error) {
+	f.listQuery = query
+	return f.list, f.err
+}
+
+func (f *fakeLessonLibrary) Get(_ context.Context, query inbound.LessonQuery) (inbound.StoredLesson, error) {
+	f.query = query
+	return f.stored, f.err
+}
+
+func (f *fakeLessonLibrary) Delete(_ context.Context, query inbound.LessonQuery) error {
+	f.query = query
+	return f.err
+}
+
+type fakeLessonPromptBuilder struct {
+	result inbound.LessonPrompt
+	err    error
+	query  inbound.LessonPromptQuery
+}
+
+func (f *fakeLessonPromptBuilder) Build(_ context.Context, query inbound.LessonPromptQuery) (inbound.LessonPrompt, error) {
+	f.query = query
+	return f.result, f.err
+}
+
 func getRequest(path string, params map[string]string) events.APIGatewayV2HTTPRequest {
 	req := events.APIGatewayV2HTTPRequest{
 		RawPath:               path,
@@ -60,7 +105,7 @@ func getRequest(path string, params map[string]string) events.APIGatewayV2HTTPRe
 func newHandler(t *testing.T, status fakeStatusProvider, reference *fakeReferenceProvider) *httpapi.Handler {
 	t.Helper()
 
-	h, err := httpapi.NewHandler(status, reference)
+	h, err := httpapi.NewHandler(status, reference, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -154,8 +199,8 @@ func TestHandleRouting(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Handle: %v", err)
 		}
-		if resp.StatusCode != http.StatusMethodNotAllowed {
-			t.Fatalf("StatusCode = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("StatusCode = %d, want %d", resp.StatusCode, http.StatusNotFound)
 		}
 	})
 }
@@ -163,10 +208,22 @@ func TestHandleRouting(t *testing.T) {
 func TestNewHandlerRejectsNilDependencies(t *testing.T) {
 	t.Parallel()
 
-	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}); err == nil {
+	importer := &fakeLessonImporter{}
+	library := &fakeLessonLibrary{}
+	prompts := &fakeLessonPromptBuilder{}
+	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}, importer, library, prompts); err == nil {
 		t.Fatal("NewHandler(nil status) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil, importer, library, prompts); err == nil {
 		t.Fatal("NewHandler(nil reference) error = nil")
+	}
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, nil, library, prompts); err == nil {
+		t.Fatal("NewHandler(nil importer) error = nil")
+	}
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, nil, prompts); err == nil {
+		t.Fatal("NewHandler(nil library) error = nil")
+	}
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, nil); err == nil {
+		t.Fatal("NewHandler(nil prompts) error = nil")
 	}
 }
