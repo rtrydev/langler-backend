@@ -16,8 +16,10 @@ import (
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
+	progressapp "github.com/rtrydev/langler-backend/internal/application/progress"
 	appref "github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
 )
@@ -50,11 +52,19 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dynamolessons.NewRepository: %v", err)
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo)
+	progressRepo, err := dynamoprogress.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("dynamoprogress.NewRepository: %v", err)
+	}
+	progressSvc, err := progressapp.NewService(progressRepo, repo)
+	if err != nil {
+		t.Fatalf("progress.NewService: %v", err)
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo, progressSvc)
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

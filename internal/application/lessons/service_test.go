@@ -92,6 +92,20 @@ type fakeReader struct {
 	err     error
 }
 
+type fakeProgressRecorder struct {
+	owner  string
+	lesson domain.Lesson
+	result domain.Result
+	err    error
+}
+
+func (f *fakeProgressRecorder) RecordLesson(_ context.Context, owner string, source domain.Lesson, result domain.Result) error {
+	f.owner = owner
+	f.lesson = source
+	f.result = result
+	return f.err
+}
+
 func (f *fakeReader) Vocab(_ context.Context, _ outbound.VocabFilter) (outbound.VocabPage, error) {
 	return f.vocab, f.err
 }
@@ -106,7 +120,7 @@ func (f *fakeReader) Scripts(_ context.Context, _ outbound.ScriptFilter) (outbou
 
 func newService(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader) *lessons.Service {
 	t.Helper()
-	svc, err := lessons.NewService(store, checker, reader, store)
+	svc, err := lessons.NewService(store, checker, reader, store, &fakeProgressRecorder{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -284,7 +298,11 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{record: outbound.LessonRecord{Lesson: validLesson()}}
-	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	progressRecorder := &fakeProgressRecorder{}
+	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, store, progressRecorder)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
 	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	result := domain.Result{
 		AttemptID:   "11111111-1111-4111-8111-111111111111",
@@ -306,6 +324,9 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 	}
 	if len(store.results) != 1 || store.results[0].Owner != "user-1" {
 		t.Fatalf("results = %+v", store.results)
+	}
+	if progressRecorder.owner != "user-1" || progressRecorder.result.AttemptID != result.AttemptID {
+		t.Fatalf("progress = %+v", progressRecorder)
 	}
 }
 

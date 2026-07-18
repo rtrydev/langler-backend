@@ -12,9 +12,11 @@ import (
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoagenttokens"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
 	"github.com/rtrydev/langler-backend/internal/application/agenttokens"
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
+	progressapp "github.com/rtrydev/langler-backend/internal/application/progress"
 	"github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
 )
@@ -55,7 +57,15 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo)
+	progressRepo, err := dynamoprogress.NewRepository(client, table)
+	if err != nil {
+		return nil, err
+	}
+	progressSvc, err := progressapp.NewService(progressRepo, repo)
+	if err != nil {
+		return nil, err
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo, progressSvc)
 	if err != nil {
 		return nil, err
 	}
@@ -68,5 +78,5 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 		return nil, err
 	}
 
-	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, tokenSvc)
+	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, tokenSvc)
 }
