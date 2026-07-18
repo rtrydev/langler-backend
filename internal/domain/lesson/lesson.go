@@ -81,7 +81,7 @@ const (
 	maxSourceModelLen  = 80
 	maxMinutes         = 240
 	maxExercises       = 25
-	maxReferencesInAll = 200
+	maxReferencesInAll = 99
 )
 
 var scriptHooks = map[Language]func(*collector, Lesson){

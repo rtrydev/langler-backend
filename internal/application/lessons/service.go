@@ -23,11 +23,11 @@ type Service struct {
 	checker    outbound.ReferenceChecker
 	reader     outbound.ReferenceReader
 	results    outbound.ResultStore
-	progress   inbound.LessonProgressRecorder
+	progress   outbound.LessonProgressRecorder
 	now        func() time.Time
 }
 
-func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore, progress inbound.LessonProgressRecorder) (*Service, error) {
+func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore, progress outbound.LessonProgressRecorder) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("lesson store must not be nil")
 	}
@@ -221,7 +221,7 @@ func (s *Service) Record(ctx context.Context, command inbound.LessonResultComman
 	if err := s.results.SaveResult(ctx, outbound.ResultRecord{Owner: command.Owner, Result: result}); err != nil && !errors.Is(err, domain.ErrAlreadyExists) {
 		return domain.Result{}, err
 	}
-	if err := s.progress.RecordLesson(ctx, command.Owner, record.Lesson, result); err != nil {
+	if err := s.progress.RecordLesson(ctx, command.Owner, record.Lesson, result, command.CompletedOn); err != nil {
 		return domain.Result{}, err
 	}
 	return result, nil

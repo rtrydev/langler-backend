@@ -69,8 +69,9 @@ type LessonPromptBuilder interface {
 }
 
 type LessonResultCommand struct {
-	Owner  string
-	Result lesson.Result
+	Owner       string
+	CompletedOn time.Time
+	Result      lesson.Result
 }
 
 type LessonResultRecorder interface {

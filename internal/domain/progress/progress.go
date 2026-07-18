@@ -11,6 +11,7 @@ var (
 	ErrInvalidItem    = errors.New("progress item is invalid")
 	ErrInvalidGrade   = errors.New("review grade is invalid")
 	ErrNotFound       = errors.New("progress item not found")
+	ErrConflict       = errors.New("progress item changed concurrently")
 	ErrStorageFailure = errors.New("progress storage failed")
 )
 
@@ -47,6 +48,7 @@ type Item struct {
 	UpdatedAt           time.Time
 	LastReviewedAt      time.Time
 	LastLessonAttemptID string
+	Version             int
 }
 
 type LessonActivity struct {
@@ -64,6 +66,7 @@ type ReviewActivity struct {
 	Language   string
 	Grade      Grade
 	ReviewedAt time.Time
+	ReviewedOn time.Time
 }
 
 func NewItem(candidate Item, now time.Time) (Item, error) {
@@ -79,7 +82,7 @@ func NewItem(candidate Item, now time.Time) (Item, error) {
 	if item.EaseFactor == 0 {
 		item.EaseFactor = 2.5
 	}
-	if item.EaseFactor < 1.3 || item.IntervalDays < 0 || item.Repetitions < 0 {
+	if item.EaseFactor < 1.3 || item.IntervalDays < 0 || item.Repetitions < 0 || item.Version < 0 {
 		return Item{}, ErrInvalidItem
 	}
 	if item.CreatedAt.IsZero() {
@@ -116,7 +119,7 @@ func GradePerformance(correct, total int) Grade {
 	}
 }
 
-func Schedule(item Item, grade Grade, reviewedAt time.Time) (Item, error) {
+func Schedule(item Item, grade Grade, reviewedAt, reviewedOn time.Time) (Item, error) {
 	if !KnownGrade(grade) {
 		return Item{}, ErrInvalidGrade
 	}
@@ -142,10 +145,14 @@ func Schedule(item Item, grade Grade, reviewedAt time.Time) (Item, error) {
 		item.EaseFactor += 0.1
 	}
 
-	day := startOfDay(reviewedAt.UTC())
+	if reviewedOn.IsZero() {
+		reviewedOn = reviewedAt
+	}
+	day := startOfDay(reviewedOn)
 	item.DueDate = day.AddDate(0, 0, item.IntervalDays)
 	item.UpdatedAt = reviewedAt.UTC()
 	item.LastReviewedAt = reviewedAt.UTC()
+	item.Version++
 	return item, nil
 }
 

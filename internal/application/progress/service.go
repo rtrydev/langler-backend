@@ -36,7 +36,9 @@ type performance struct {
 	total   int
 }
 
-func (s *Service) RecordLesson(ctx context.Context, owner string, source lesson.Lesson, result lesson.Result) error {
+const saveAttempts = 4
+
+func (s *Service) RecordLesson(ctx context.Context, owner string, source lesson.Lesson, result lesson.Result, completedOn time.Time) error {
 	if owner == "" {
 		return lesson.ErrInvalidOwner
 	}
@@ -46,46 +48,63 @@ func (s *Service) RecordLesson(ctx context.Context, owner string, source lesson.
 	if err != nil {
 		return err
 	}
-	existing, err := s.store.GetItems(ctx, owner, string(source.Language), keys)
-	if err != nil {
-		return err
-	}
-
-	items := make([]domain.Item, 0, len(performances))
 	completedAt := resultTime(result, s.now())
+	if completedOn.IsZero() {
+		completedOn = completedAt
+	}
+	activity := domain.LessonActivity{
+		AttemptID: result.AttemptID, LessonID: source.ID, Language: string(source.Language),
+		Title: source.Title, Score: result.Score, MaxScore: result.MaxScore, CompletedAt: result.CompletedAt,
+	}
+	for range saveAttempts {
+		existing, err := s.store.GetItems(ctx, owner, string(source.Language), keys)
+		if err != nil {
+			return err
+		}
+		items, err := scheduledLessonItems(performances, existing, contexts, string(source.Language), result.AttemptID, completedAt, completedOn)
+		if err != nil {
+			return err
+		}
+		err = s.store.SaveLesson(ctx, owner, items, activity)
+		if !errors.Is(err, domain.ErrConflict) {
+			return err
+		}
+	}
+	return domain.ErrConflict
+}
+
+func scheduledLessonItems(performances []performance, existing map[string]domain.Item, contexts map[string]outbound.ReferenceContext, language, attemptID string, completedAt, completedOn time.Time) ([]domain.Item, error) {
+	items := make([]domain.Item, 0, len(performances))
 	for _, outcome := range performances {
 		key := itemKey(outcome.kind, outcome.id)
 		item, ok := existing[key]
 		if !ok {
 			context, found := contexts[key]
 			if !found {
-				return fmt.Errorf("%w: reference context for %s", domain.ErrInvalidItem, outcome.id)
+				return nil, fmt.Errorf("%w: reference context for %s", domain.ErrInvalidItem, outcome.id)
 			}
-			item, err = domain.NewItem(domain.Item{
-				ID: outcome.id, Language: string(source.Language), Kind: outcome.kind,
+			created, err := domain.NewItem(domain.Item{
+				ID: outcome.id, Language: language, Kind: outcome.kind,
 				Headword: context.Headword, Reading: context.Reading, Gloss: context.Gloss,
 				Example: context.Example, ExampleMeaning: context.ExampleMeaning,
 			}, completedAt)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			item = created
 		}
-		if item.LastLessonAttemptID == result.AttemptID {
-			items = append(items, item)
+		if item.LastLessonAttemptID == attemptID {
 			continue
 		}
-		item, err = domain.Schedule(item, domain.GradePerformance(outcome.correct, outcome.total), completedAt)
+		scheduled, err := domain.Schedule(item, domain.GradePerformance(outcome.correct, outcome.total), completedAt, completedOn)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		item.LastLessonAttemptID = result.AttemptID
+		item = scheduled
+		item.LastLessonAttemptID = attemptID
 		items = append(items, item)
 	}
-
-	return s.store.SaveLesson(ctx, owner, items, domain.LessonActivity{
-		AttemptID: result.AttemptID, LessonID: source.ID, Language: string(source.Language),
-		Title: source.Title, Score: result.Score, MaxScore: result.MaxScore, CompletedAt: result.CompletedAt,
-	})
+	return items, nil
 }
 
 func resultTime(result lesson.Result, fallback time.Time) time.Time {
@@ -104,7 +123,7 @@ func lessonPerformances(source lesson.Lesson, result lesson.Result) []performanc
 	order := make([]string, 0)
 	for _, exercise := range source.Exercises {
 		outcome, ok := outcomes[exercise.ID]
-		if !ok {
+		if !ok || outcome.Total == 0 {
 			continue
 		}
 		for _, reference := range exercise.ReferencedVocab {
@@ -182,26 +201,37 @@ func (s *Service) Grade(ctx context.Context, command inbound.ReviewGradeCommand)
 	if !lesson.KnownLanguage(lesson.Language(command.Language)) || !domain.KnownKind(command.Kind) || command.ItemID == "" || !domain.KnownGrade(command.Grade) {
 		return domain.Item{}, domain.ErrInvalidItem
 	}
-	items, err := s.store.GetItems(ctx, command.Owner, command.Language, []string{itemKey(command.Kind, command.ItemID)})
-	if err != nil {
-		return domain.Item{}, err
-	}
-	item, ok := items[itemKey(command.Kind, command.ItemID)]
-	if !ok {
-		return domain.Item{}, domain.ErrNotFound
-	}
 	reviewedAt := command.ReviewedAt
 	if reviewedAt.IsZero() {
 		reviewedAt = s.now().UTC()
 	}
-	item, err = domain.Schedule(item, command.Grade, reviewedAt)
-	if err != nil {
-		return domain.Item{}, err
+	reviewedOn := command.ReviewedOn
+	if reviewedOn.IsZero() {
+		reviewedOn = reviewedAt
 	}
-	err = s.store.SaveReview(ctx, command.Owner, item, domain.ReviewActivity{
-		ItemID: command.ItemID, Language: command.Language, Grade: command.Grade, ReviewedAt: reviewedAt,
-	})
-	return item, err
+	key := itemKey(command.Kind, command.ItemID)
+	for range saveAttempts {
+		items, err := s.store.GetItems(ctx, command.Owner, command.Language, []string{key})
+		if err != nil {
+			return domain.Item{}, err
+		}
+		item, ok := items[key]
+		if !ok {
+			return domain.Item{}, domain.ErrNotFound
+		}
+		item, err = domain.Schedule(item, command.Grade, reviewedAt, reviewedOn)
+		if err != nil {
+			return domain.Item{}, err
+		}
+		err = s.store.SaveReview(ctx, command.Owner, item, domain.ReviewActivity{
+			ItemID: command.ItemID, Language: command.Language, Grade: command.Grade,
+			ReviewedAt: reviewedAt, ReviewedOn: reviewedOn,
+		})
+		if !errors.Is(err, domain.ErrConflict) {
+			return item, err
+		}
+	}
+	return domain.Item{}, domain.ErrConflict
 }
 
 func (s *Service) Summary(ctx context.Context, query inbound.ProgressSummaryQuery) (inbound.ProgressSummary, error) {
@@ -254,7 +284,11 @@ func summarize(snapshot outbound.ProgressSnapshot, dueOn time.Time) inbound.Prog
 		if reviewDays[activity.Language] == nil {
 			reviewDays[activity.Language] = map[string]int{}
 		}
-		reviewDays[activity.Language][dateKey(activity.ReviewedAt)]++
+		reviewedOn := activity.ReviewedOn
+		if reviewedOn.IsZero() {
+			reviewedOn = activity.ReviewedAt
+		}
+		reviewDays[activity.Language][dateKey(reviewedOn)]++
 	}
 
 	languages := make([]inbound.LanguageProgress, 0, len(byLanguage))

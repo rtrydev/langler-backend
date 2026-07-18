@@ -4,13 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rtrydev/langler-backend/internal/domain/lesson"
 	"github.com/rtrydev/langler-backend/internal/domain/progress"
 )
-
-type LessonProgressRecorder interface {
-	RecordLesson(ctx context.Context, owner string, source lesson.Lesson, result lesson.Result) error
-}
 
 type DueReviewQuery struct {
 	Owner    string
@@ -34,6 +29,7 @@ type ReviewGradeCommand struct {
 	ItemID     string
 	Grade      progress.Grade
 	ReviewedAt time.Time
+	ReviewedOn time.Time
 }
 
 type ReviewQueue interface {

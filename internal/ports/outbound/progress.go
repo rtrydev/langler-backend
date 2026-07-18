@@ -4,8 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/rtrydev/langler-backend/internal/domain/lesson"
 	"github.com/rtrydev/langler-backend/internal/domain/progress"
 )
+
+type LessonProgressRecorder interface {
+	RecordLesson(ctx context.Context, owner string, source lesson.Lesson, result lesson.Result, completedOn time.Time) error
+}
 
 type ReferenceContext struct {
 	ID             string

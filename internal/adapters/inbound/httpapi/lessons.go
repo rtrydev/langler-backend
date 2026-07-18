@@ -75,6 +75,7 @@ type resultDocument struct {
 	AttemptID   string                   `json:"attemptId"`
 	StartedAt   string                   `json:"startedAt"`
 	CompletedAt string                   `json:"completedAt"`
+	CompletedOn string                   `json:"completedOn"`
 	Score       int                      `json:"score"`
 	MaxScore    int                      `json:"maxScore"`
 	AutoScore   int                      `json:"autoScore"`
@@ -333,6 +334,10 @@ func (h *Handler) handleLessonResult(ctx context.Context, req events.APIGatewayV
 	if err != nil {
 		return errorJSON(http.StatusBadRequest, "completedAt must be an RFC 3339 timestamp")
 	}
+	completedOn, errResponse := parseStudyDate(doc.CompletedOn, "completedOn")
+	if errResponse != nil {
+		return *errResponse
+	}
 	exercises := make([]lesson.ExerciseResult, 0, len(doc.Exercises))
 	for _, exercise := range doc.Exercises {
 		exercises = append(exercises, lesson.ExerciseResult{
@@ -346,7 +351,7 @@ func (h *Handler) handleLessonResult(ctx context.Context, req events.APIGatewayV
 		})
 	}
 	result, err := h.results.Record(ctx, inbound.LessonResultCommand{
-		Owner: owner,
+		Owner: owner, CompletedOn: completedOn,
 		Result: lesson.Result{
 			AttemptID:   doc.AttemptID,
 			LessonID:    id,

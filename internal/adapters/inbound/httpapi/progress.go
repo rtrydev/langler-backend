@@ -37,7 +37,11 @@ func (h *Handler) handleDueReviews(ctx context.Context, req events.APIGatewayV2H
 	if owner == "" {
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}
-	result, err := h.progress.Due(ctx, inbound.DueReviewQuery{Owner: owner, Language: req.QueryStringParameters["language"]})
+	dueOn, errResponse := parseStudyDate(req.QueryStringParameters["date"], "date")
+	if errResponse != nil {
+		return *errResponse
+	}
+	result, err := h.progress.Due(ctx, inbound.DueReviewQuery{Owner: owner, Language: req.QueryStringParameters["language"], DueOn: dueOn})
 	if err != nil {
 		return progressError(ctx, err)
 	}
@@ -62,17 +66,22 @@ func (h *Handler) handleReviewGrade(ctx context.Context, req events.APIGatewayV2
 		return *errResponse
 	}
 	var document struct {
-		Language string `json:"language"`
-		Kind     string `json:"kind"`
-		ItemID   string `json:"itemId"`
-		Grade    string `json:"grade"`
+		Language   string `json:"language"`
+		Kind       string `json:"kind"`
+		ItemID     string `json:"itemId"`
+		Grade      string `json:"grade"`
+		ReviewedOn string `json:"reviewedOn"`
 	}
 	if issue := decodeStrict(body, &document, "$"); issue != nil {
 		return respondJSON(http.StatusBadRequest, validationResponse{Error: "review validation failed", Issues: []issueDTO{*issue}})
 	}
+	reviewedOn, errResponse := parseStudyDate(document.ReviewedOn, "reviewedOn")
+	if errResponse != nil {
+		return *errResponse
+	}
 	item, err := h.progress.Grade(ctx, inbound.ReviewGradeCommand{
 		Owner: owner, Language: document.Language, Kind: progress.ItemKind(document.Kind),
-		ItemID: document.ItemID, Grade: progress.Grade(document.Grade),
+		ItemID: document.ItemID, Grade: progress.Grade(document.Grade), ReviewedOn: reviewedOn,
 	})
 	if err != nil {
 		return progressError(ctx, err)
@@ -103,7 +112,11 @@ func (h *Handler) handleProgressSummary(ctx context.Context, req events.APIGatew
 	if owner == "" {
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}
-	result, err := h.progress.Summary(ctx, inbound.ProgressSummaryQuery{Owner: owner})
+	dueOn, errResponse := parseStudyDate(req.QueryStringParameters["date"], "date")
+	if errResponse != nil {
+		return *errResponse
+	}
+	result, err := h.progress.Summary(ctx, inbound.ProgressSummaryQuery{Owner: owner, DueOn: dueOn})
 	if err != nil {
 		return progressError(ctx, err)
 	}
@@ -124,6 +137,18 @@ func (h *Handler) handleProgressSummary(ctx context.Context, req events.APIGatew
 		})
 	}
 	return respondJSON(http.StatusOK, map[string]any{"languages": languages})
+}
+
+func parseStudyDate(value, field string) (time.Time, *events.APIGatewayV2HTTPResponse) {
+	if value == "" {
+		return time.Time{}, nil
+	}
+	parsed, err := time.Parse(time.DateOnly, value)
+	if err != nil {
+		response := errorJSON(http.StatusBadRequest, field+" must be a YYYY-MM-DD date")
+		return time.Time{}, &response
+	}
+	return parsed, nil
 }
 
 func toReviewItem(item progress.Item) reviewItemDTO {

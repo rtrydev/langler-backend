@@ -107,21 +107,27 @@ func (f *fakeLessonPromptBuilder) Build(_ context.Context, query inbound.LessonP
 }
 
 type fakeProgressProvider struct {
-	due     inbound.DueReviews
-	summary inbound.ProgressSummary
-	item    progress.Item
-	err     error
+	due          inbound.DueReviews
+	summary      inbound.ProgressSummary
+	item         progress.Item
+	err          error
+	dueQuery     inbound.DueReviewQuery
+	gradeCommand inbound.ReviewGradeCommand
+	summaryQuery inbound.ProgressSummaryQuery
 }
 
-func (f *fakeProgressProvider) Due(context.Context, inbound.DueReviewQuery) (inbound.DueReviews, error) {
+func (f *fakeProgressProvider) Due(_ context.Context, query inbound.DueReviewQuery) (inbound.DueReviews, error) {
+	f.dueQuery = query
 	return f.due, f.err
 }
 
-func (f *fakeProgressProvider) Grade(context.Context, inbound.ReviewGradeCommand) (progress.Item, error) {
+func (f *fakeProgressProvider) Grade(_ context.Context, command inbound.ReviewGradeCommand) (progress.Item, error) {
+	f.gradeCommand = command
 	return f.item, f.err
 }
 
-func (f *fakeProgressProvider) Summary(context.Context, inbound.ProgressSummaryQuery) (inbound.ProgressSummary, error) {
+func (f *fakeProgressProvider) Summary(_ context.Context, query inbound.ProgressSummaryQuery) (inbound.ProgressSummary, error) {
+	f.summaryQuery = query
 	return f.summary, f.err
 }
 

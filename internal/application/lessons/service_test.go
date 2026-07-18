@@ -93,16 +93,18 @@ type fakeReader struct {
 }
 
 type fakeProgressRecorder struct {
-	owner  string
-	lesson domain.Lesson
-	result domain.Result
-	err    error
+	owner       string
+	lesson      domain.Lesson
+	result      domain.Result
+	completedOn time.Time
+	err         error
 }
 
-func (f *fakeProgressRecorder) RecordLesson(_ context.Context, owner string, source domain.Lesson, result domain.Result) error {
+func (f *fakeProgressRecorder) RecordLesson(_ context.Context, owner string, source domain.Lesson, result domain.Result, completedOn time.Time) error {
 	f.owner = owner
 	f.lesson = source
 	f.result = result
+	f.completedOn = completedOn
 	return f.err
 }
 
@@ -319,7 +321,8 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 		},
 	}
 
-	if _, err := svc.Record(context.Background(), inbound.LessonResultCommand{Owner: "user-1", Result: result}); err != nil {
+	completedOn := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)
+	if _, err := svc.Record(context.Background(), inbound.LessonResultCommand{Owner: "user-1", CompletedOn: completedOn, Result: result}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 	if len(store.results) != 1 || store.results[0].Owner != "user-1" {
@@ -327,6 +330,9 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 	}
 	if progressRecorder.owner != "user-1" || progressRecorder.result.AttemptID != result.AttemptID {
 		t.Fatalf("progress = %+v", progressRecorder)
+	}
+	if !progressRecorder.completedOn.Equal(completedOn) {
+		t.Fatalf("completedOn = %v", progressRecorder.completedOn)
 	}
 }
 

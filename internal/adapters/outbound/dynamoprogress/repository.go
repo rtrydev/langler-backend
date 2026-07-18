@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -50,6 +51,7 @@ type itemRecord struct {
 	UpdatedAt           string  `dynamodbav:"updatedAt"`
 	LastReviewedAt      string  `dynamodbav:"lastReviewedAt,omitempty"`
 	LastLessonAttemptID string  `dynamodbav:"lastLessonAttemptId,omitempty"`
+	Version             int     `dynamodbav:"version"`
 }
 
 type lessonActivityRecord struct {
@@ -71,6 +73,7 @@ type reviewActivityRecord struct {
 	Language   string `dynamodbav:"language"`
 	Grade      string `dynamodbav:"grade"`
 	ReviewedAt string `dynamodbav:"reviewedAt"`
+	ReviewedOn string `dynamodbav:"reviewedOn,omitempty"`
 }
 
 func (r *Repository) GetItems(ctx context.Context, owner, language string, keys []string) (map[string]domain.Item, error) {
@@ -127,24 +130,25 @@ func (r *Repository) SaveLesson(ctx context.Context, owner string, items []domai
 		if err != nil {
 			return fmt.Errorf("%w: marshal progress item: %v", domain.ErrStorageFailure, err)
 		}
-		writes = append(writes, types.TransactWriteItem{Put: &types.Put{TableName: aws.String(r.table), Item: mapped}})
+		writes = append(writes, types.TransactWriteItem{Put: conditionalItemPut(r.table, mapped, item.Version)})
 	}
 	writes = append(writes, types.TransactWriteItem{Put: &types.Put{
 		TableName: aws.String(r.table), Item: activityMap, ConditionExpression: aws.String("attribute_not_exists(PK)"),
 	}})
-	for offset := 0; offset < len(writes); offset += 100 {
-		end := min(offset+100, len(writes))
-		if _, err := r.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: writes[offset:end]}); err != nil {
-			if exists, getErr := r.lessonActivityExists(ctx, activityMap); getErr == nil && exists {
-				return nil
-			}
-			return fmt.Errorf("%w: save lesson progress: %v", domain.ErrStorageFailure, err)
+	if _, err := r.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: writes}); err != nil {
+		if exists, getErr := r.activityExists(ctx, activityMap); getErr == nil && exists {
+			return nil
 		}
+		var canceled *types.TransactionCanceledException
+		if errors.As(err, &canceled) {
+			return fmt.Errorf("%w: save lesson progress", domain.ErrConflict)
+		}
+		return fmt.Errorf("%w: save lesson progress: %v", domain.ErrStorageFailure, err)
 	}
 	return nil
 }
 
-func (r *Repository) lessonActivityExists(ctx context.Context, activity map[string]types.AttributeValue) (bool, error) {
+func (r *Repository) activityExists(ctx context.Context, activity map[string]types.AttributeValue) (bool, error) {
 	out, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName:      aws.String(r.table),
 		Key:            map[string]types.AttributeValue{"PK": activity["PK"], "SK": activity["SK"]},
@@ -210,10 +214,17 @@ func (r *Repository) SaveReview(ctx context.Context, owner string, item domain.I
 		return fmt.Errorf("%w: marshal review activity: %v", domain.ErrStorageFailure, err)
 	}
 	_, err = r.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{
-		{Put: &types.Put{TableName: aws.String(r.table), Item: itemMap}},
+		{Put: conditionalItemPut(r.table, itemMap, item.Version)},
 		{Put: &types.Put{TableName: aws.String(r.table), Item: activityMap, ConditionExpression: aws.String("attribute_not_exists(PK)")}},
 	}})
 	if err != nil {
+		if exists, getErr := r.activityExists(ctx, activityMap); getErr == nil && exists {
+			return nil
+		}
+		var canceled *types.TransactionCanceledException
+		if errors.As(err, &canceled) {
+			return fmt.Errorf("%w: save review", domain.ErrConflict)
+		}
 		return fmt.Errorf("%w: save review: %v", domain.ErrStorageFailure, err)
 	}
 	return nil
@@ -317,7 +328,7 @@ func toItem(owner string, item domain.Item) itemRecord {
 		EaseFactor: item.EaseFactor, IntervalDays: item.IntervalDays, Repetitions: item.Repetitions,
 		DueDate: item.DueDate.UTC().Format(time.RFC3339Nano), CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), LastReviewedAt: lastReviewed,
-		LastLessonAttemptID: item.LastLessonAttemptID,
+		LastLessonAttemptID: item.LastLessonAttemptID, Version: item.Version,
 	}
 }
 
@@ -346,7 +357,7 @@ func (record itemRecord) toDomain() (domain.Item, error) {
 		Reading: record.Reading, Gloss: record.Gloss, Example: record.Example, ExampleMeaning: record.ExampleMeaning,
 		EaseFactor: record.EaseFactor, IntervalDays: record.IntervalDays, Repetitions: record.Repetitions,
 		DueDate: dueDate, CreatedAt: createdAt, UpdatedAt: updatedAt, LastReviewedAt: lastReviewed,
-		LastLessonAttemptID: record.LastLessonAttemptID,
+		LastLessonAttemptID: record.LastLessonAttemptID, Version: record.Version,
 	}, nil
 }
 
@@ -371,11 +382,15 @@ func (record lessonActivityRecord) toDomain() (domain.LessonActivity, error) {
 }
 
 func toReviewActivity(owner string, kind domain.ItemKind, activity domain.ReviewActivity) reviewActivityRecord {
+	reviewedOn := ""
+	if !activity.ReviewedOn.IsZero() {
+		reviewedOn = activity.ReviewedOn.Format(time.DateOnly)
+	}
 	return reviewActivityRecord{
 		PK:     "USER#" + owner,
 		SK:     "ACTIVITY#REVIEW#" + activity.ReviewedAt.UTC().Format("20060102T150405.000000000Z") + "#" + string(kind) + "#" + activity.ItemID,
 		ItemID: activity.ItemID, Language: activity.Language, Grade: string(activity.Grade),
-		ReviewedAt: activity.ReviewedAt.UTC().Format(time.RFC3339Nano),
+		ReviewedAt: activity.ReviewedAt.UTC().Format(time.RFC3339Nano), ReviewedOn: reviewedOn,
 	}
 }
 
@@ -384,9 +399,35 @@ func (record reviewActivityRecord) toDomain() (domain.ReviewActivity, error) {
 	if err != nil {
 		return domain.ReviewActivity{}, fmt.Errorf("%w: invalid review time: %v", domain.ErrStorageFailure, err)
 	}
+	var reviewedOn time.Time
+	if record.ReviewedOn != "" {
+		reviewedOn, err = time.Parse(time.DateOnly, record.ReviewedOn)
+		if err != nil {
+			return domain.ReviewActivity{}, fmt.Errorf("%w: invalid review date: %v", domain.ErrStorageFailure, err)
+		}
+	}
 	return domain.ReviewActivity{
-		ItemID: record.ItemID, Language: record.Language, Grade: domain.Grade(record.Grade), ReviewedAt: reviewedAt,
+		ItemID: record.ItemID, Language: record.Language, Grade: domain.Grade(record.Grade),
+		ReviewedAt: reviewedAt, ReviewedOn: reviewedOn,
 	}, nil
+}
+
+func conditionalItemPut(table string, item map[string]types.AttributeValue, version int) *types.Put {
+	expected := max(0, version-1)
+	put := &types.Put{
+		TableName:                aws.String(table),
+		Item:                     item,
+		ExpressionAttributeNames: map[string]string{"#version": "version"},
+	}
+	if expected == 0 {
+		put.ConditionExpression = aws.String("attribute_not_exists(PK) OR attribute_not_exists(#version)")
+		return put
+	}
+	put.ConditionExpression = aws.String("#version = :expected")
+	put.ExpressionAttributeValues = map[string]types.AttributeValue{
+		":expected": &types.AttributeValueMemberN{Value: strconv.Itoa(expected)},
+	}
+	return put
 }
 
 func endOfDay(value time.Time) time.Time {
