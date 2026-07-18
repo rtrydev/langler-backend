@@ -1,6 +1,6 @@
-# <repo name>
+# langler-backend
 
-Go backend for <service>, deployed as AWS Lambda functions. Domain-driven design on a hexagonal (ports and adapters) structure.
+Go backend for Langler, deployed as AWS Lambda functions. Domain-driven design on a hexagonal (ports and adapters) structure.
 
 ## Runtime
 
@@ -19,7 +19,7 @@ Go has no managed Lambda runtime. We target `provided.al2023` (supported to June
 - Test one package: `go test ./internal/domain/booking/...`
 - Race detector: `go test -race ./...`
 - Lint: `golangci-lint run`
-- Format: `gofmt -w .` and `goimports -w .`
+- Format: `make fmt`
 - Modernize: `go fix ./...`
 - Vulnerability check: `govulncheck ./...`
 

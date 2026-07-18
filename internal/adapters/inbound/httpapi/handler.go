@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -15,8 +16,11 @@ type Handler struct {
 	status inbound.StatusProvider
 }
 
-func NewHandler(status inbound.StatusProvider) *Handler {
-	return &Handler{status: status}
+func NewHandler(status inbound.StatusProvider) (*Handler, error) {
+	if status == nil {
+		return nil, errors.New("status provider must not be nil")
+	}
+	return &Handler{status: status}, nil
 }
 
 type statusResponse struct {

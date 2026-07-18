@@ -1,6 +1,6 @@
 LAMBDAS := api
 BUILD_DIR := build
-GOBIN := $(shell go env GOPATH)/bin
+GO_FILES := $(shell find . -type f -name '*.go' -not -path './build/*')
 
 .PHONY: all build test race lint fmt vuln clean $(LAMBDAS)
 
@@ -24,11 +24,11 @@ lint:
 	golangci-lint run
 
 fmt:
-	gofmt -w .
-	$(GOBIN)/goimports -w .
+	gofmt -w $(GO_FILES)
+	goimports -w $(GO_FILES)
 
 vuln:
-	$(GOBIN)/govulncheck ./...
+	govulncheck ./...
 
 clean:
 	rm -rf $(BUILD_DIR)

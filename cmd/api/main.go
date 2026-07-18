@@ -19,5 +19,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	lambda.Start(httpapi.NewHandler(svc).Handle)
+	handler, err := httpapi.NewHandler(svc)
+	if err != nil {
+		slog.Error("wiring failed", "error", err)
+		os.Exit(1)
+	}
+
+	lambda.Start(handler.Handle)
 }

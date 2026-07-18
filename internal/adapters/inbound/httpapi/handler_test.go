@@ -56,7 +56,10 @@ func TestHandlerHandle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			h := httpapi.NewHandler(tt.provider)
+			h, err := httpapi.NewHandler(tt.provider)
+			if err != nil {
+				t.Fatalf("NewHandler: %v", err)
+			}
 			resp, err := h.Handle(context.Background(), events.APIGatewayV2HTTPRequest{})
 			if err != nil {
 				t.Fatalf("Handle: %v", err)
@@ -80,5 +83,13 @@ func TestHandlerHandle(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNewHandlerRejectsNilStatusProvider(t *testing.T) {
+	t.Parallel()
+
+	if _, err := httpapi.NewHandler(nil); err == nil {
+		t.Fatal("NewHandler(nil) error = nil")
 	}
 }
