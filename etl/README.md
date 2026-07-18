@@ -36,6 +36,9 @@ python3 -m venv .venv
 `wordfreq` is installed with its `cjk` extra — Japanese lookups need the MeCab
 tokenizer it brings.
 
+If your AWS credentials come from `aws login` (the login credential provider),
+`load` additionally needs `.venv/bin/pip install "botocore[crt]"`.
+
 ## Refreshing the data
 
 ```sh
