@@ -7,8 +7,14 @@ Self-contained Go binaries (`bootstrap`) running on AWS Lambda (`provided.al2023
 ## Layout
 
 ```
-cmd/api/        hello-world Lambda (API Gateway HTTP API v2 payload)
-build/          zipped bootstrap artifacts (gitignored), consumed by terraform
+cmd/api/                    Lambda entrypoint: wires adapters into services (API Gateway HTTP API v2 payload)
+internal/domain/            entities, value objects, domain services (pure Go)
+internal/ports/inbound/     use-case interfaces the outside world invokes
+internal/ports/outbound/    capabilities the domain requires from the outside world
+internal/application/       use-case orchestration implementing inbound ports
+internal/adapters/inbound/  Lambda handlers and event decoders
+internal/adapters/outbound/ DynamoDB, S3, SQS, HTTP client implementations
+build/                      zipped bootstrap artifacts (gitignored), consumed by terraform
 ```
 
 ## Build

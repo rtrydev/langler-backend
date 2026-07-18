@@ -1,14 +1,13 @@
 LAMBDAS := api
 BUILD_DIR := build
+GOBIN := $(shell go env GOPATH)/bin
 
-.PHONY: all build test clean $(LAMBDAS)
+.PHONY: all build test race lint fmt vuln clean $(LAMBDAS)
 
 all: build
 
 build: $(LAMBDAS)
 
-# Each Lambda is a self-contained arm64 bootstrap binary for provided.al2023,
-# zipped for terraform to pick up from build/<name>.zip.
 $(LAMBDAS):
 	mkdir -p $(BUILD_DIR)/$@
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -trimpath \
@@ -17,6 +16,19 @@ $(LAMBDAS):
 
 test:
 	go test ./...
+
+race:
+	go test -race ./...
+
+lint:
+	golangci-lint run
+
+fmt:
+	gofmt -w .
+	$(GOBIN)/goimports -w .
+
+vuln:
+	$(GOBIN)/govulncheck ./...
 
 clean:
 	rm -rf $(BUILD_DIR)
