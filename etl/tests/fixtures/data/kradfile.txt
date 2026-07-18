@@ -1,0 +1,4 @@
+# KRADFILE excerpt for tests
+亜 : ｜ 一 口
+水 : 水
+者 : 土 ノ 日

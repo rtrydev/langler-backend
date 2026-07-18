@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langler-etl"
+version = "0.1.0"
+description = "Offline ETL for Langler Japanese reference data"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.34",
+    "wordfreq[cjk]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+langler-etl = "langler_etl.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["langler_etl*"]
+
+[tool.setuptools.package-data]
+langler_etl = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
