@@ -27,6 +27,10 @@ type LessonStore interface {
 	Delete(ctx context.Context, owner, id string) error
 }
 
+type IdempotentLessonStore interface {
+	SaveIdempotent(ctx context.Context, record LessonRecord, key string) (LessonRecord, bool, error)
+}
+
 type ResultRecord struct {
 	Owner  string
 	Result lesson.Result

@@ -10,8 +10,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoagenttokens"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
+	"github.com/rtrydev/langler-backend/internal/application/agenttokens"
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
 	"github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
@@ -57,6 +59,14 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	tokenRepo, err := dynamoagenttokens.NewRepository(client, table)
+	if err != nil {
+		return nil, err
+	}
+	tokenSvc, err := agenttokens.NewService(tokenRepo, tokenRepo)
+	if err != nil {
+		return nil, err
+	}
 
-	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc)
+	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, tokenSvc)
 }

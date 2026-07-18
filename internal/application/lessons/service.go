@@ -18,11 +18,12 @@ const (
 )
 
 type Service struct {
-	store   outbound.LessonStore
-	checker outbound.ReferenceChecker
-	reader  outbound.ReferenceReader
-	results outbound.ResultStore
-	now     func() time.Time
+	store      outbound.LessonStore
+	idempotent outbound.IdempotentLessonStore
+	checker    outbound.ReferenceChecker
+	reader     outbound.ReferenceReader
+	results    outbound.ResultStore
+	now        func() time.Time
 }
 
 func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore) (*Service, error) {
@@ -38,7 +39,11 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if results == nil {
 		return nil, errors.New("result store must not be nil")
 	}
-	return &Service{store: store, checker: checker, reader: reader, results: results, now: time.Now}, nil
+	idempotent, ok := store.(outbound.IdempotentLessonStore)
+	if !ok {
+		return nil, errors.New("lesson store must support idempotent imports")
+	}
+	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, results: results, now: time.Now}, nil
 }
 
 func (s *Service) Import(ctx context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {
@@ -59,6 +64,13 @@ func (s *Service) Import(ctx context.Context, command inbound.LessonImportComman
 		ContentHash: command.ContentHash,
 		CreatedAt:   s.now().UTC(),
 		Lesson:      validated,
+	}
+	if command.IdempotencyKey != "" {
+		stored, created, err := s.idempotent.SaveIdempotent(ctx, record, command.IdempotencyKey)
+		if err != nil {
+			return inbound.LessonImportResult{}, err
+		}
+		return inbound.LessonImportResult{Stored: storedLesson(stored), Created: created}, nil
 	}
 	saveErr := s.store.Save(ctx, record)
 	if errors.Is(saveErr, domain.ErrAlreadyExists) {

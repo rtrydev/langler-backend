@@ -34,6 +34,17 @@ func (f *fakeStore) Save(_ context.Context, record outbound.LessonRecord) error 
 	return nil
 }
 
+func (f *fakeStore) SaveIdempotent(_ context.Context, record outbound.LessonRecord, _ string) (outbound.LessonRecord, bool, error) {
+	if f.saveErr != nil {
+		if errors.Is(f.saveErr, domain.ErrAlreadyExists) {
+			return f.record, false, nil
+		}
+		return outbound.LessonRecord{}, false, f.saveErr
+	}
+	f.saved = append(f.saved, record)
+	return record, true, nil
+}
+
 func (f *fakeStore) Get(_ context.Context, _, id string) (outbound.LessonRecord, error) {
 	if f.getErr != nil {
 		return outbound.LessonRecord{}, f.getErr
@@ -161,6 +172,21 @@ func TestImportSavesValidatedLesson(t *testing.T) {
 	}
 	if store.saved[0].CreatedAt.IsZero() {
 		t.Error("CreatedAt is zero")
+	}
+}
+
+func TestImportUsesIdempotencyKey(t *testing.T) {
+	t.Parallel()
+
+	existing := outbound.LessonRecord{Owner: "user-1", CreatedAt: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), Lesson: validLesson()}
+	store := &fakeStore{saveErr: domain.ErrAlreadyExists, record: existing}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	result, err := svc.Import(context.Background(), inbound.LessonImportCommand{Owner: "user-1", IdempotencyKey: "stable-request-key", Lesson: validLesson()})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.Created || !result.Stored.CreatedAt.Equal(existing.CreatedAt) {
+		t.Errorf("result = %+v", result)
 	}
 }
 

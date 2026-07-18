@@ -2,6 +2,7 @@ package dynamolessons
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,14 @@ import (
 	domain "github.com/rtrydev/langler-backend/internal/domain/lesson"
 	"github.com/rtrydev/langler-backend/internal/ports/outbound"
 )
+
+type idempotencyItem struct {
+	PK          string `dynamodbav:"PK"`
+	SK          string `dynamodbav:"SK"`
+	LessonID    string `dynamodbav:"lessonId"`
+	ContentHash string `dynamodbav:"contentHash"`
+	CreatedAt   string `dynamodbav:"createdAt"`
+}
 
 type Repository struct {
 	client *dynamodb.Client
@@ -51,6 +60,60 @@ func (r *Repository) Save(ctx context.Context, record outbound.LessonRecord) err
 		return fmt.Errorf("%w: put lesson: %v", domain.ErrStorageFailure, err)
 	}
 	return nil
+}
+
+func (r *Repository) SaveIdempotent(ctx context.Context, record outbound.LessonRecord, key string) (outbound.LessonRecord, bool, error) {
+	lessonMap, err := attributevalue.MarshalMap(toItem(record.Owner, record.ContentHash, record.CreatedAt, record.Lesson))
+	if err != nil {
+		return outbound.LessonRecord{}, false, fmt.Errorf("%w: marshal lesson: %v", domain.ErrStorageFailure, err)
+	}
+	keyHash := sha256.Sum256([]byte(key))
+	marker := idempotencyItem{
+		PK: "USER#" + record.Owner, SK: "IDEMPOTENCY#" + fmt.Sprintf("%x", keyHash[:]),
+		LessonID: record.Lesson.ID, ContentHash: record.ContentHash, CreatedAt: record.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	markerMap, err := attributevalue.MarshalMap(marker)
+	if err != nil {
+		return outbound.LessonRecord{}, false, fmt.Errorf("%w: marshal idempotency marker: %v", domain.ErrStorageFailure, err)
+	}
+	_, err = r.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{
+		{Put: &types.Put{TableName: aws.String(r.table), Item: lessonMap, ConditionExpression: aws.String("attribute_not_exists(PK)")}},
+		{Put: &types.Put{TableName: aws.String(r.table), Item: markerMap, ConditionExpression: aws.String("attribute_not_exists(PK)")}},
+	}})
+	if err == nil {
+		return record, true, nil
+	}
+	var cancelled *types.TransactionCanceledException
+	if !errors.As(err, &cancelled) {
+		return outbound.LessonRecord{}, false, fmt.Errorf("%w: import lesson: %v", domain.ErrStorageFailure, err)
+	}
+	existingID := record.Lesson.ID
+	markerOut, getErr := r.client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(r.table),
+		Key: map[string]types.AttributeValue{
+			"PK": &types.AttributeValueMemberS{Value: marker.PK},
+			"SK": &types.AttributeValueMemberS{Value: marker.SK},
+		},
+		ConsistentRead: aws.Bool(true),
+	})
+	if getErr != nil {
+		return outbound.LessonRecord{}, false, fmt.Errorf("%w: get idempotency marker: %v", domain.ErrStorageFailure, getErr)
+	}
+	if markerOut.Item != nil {
+		var existingMarker idempotencyItem
+		if err := attributevalue.UnmarshalMap(markerOut.Item, &existingMarker); err != nil {
+			return outbound.LessonRecord{}, false, fmt.Errorf("%w: unmarshal idempotency marker: %v", domain.ErrStorageFailure, err)
+		}
+		if existingMarker.ContentHash != record.ContentHash {
+			return outbound.LessonRecord{}, false, domain.ErrIdempotencyConflict
+		}
+		existingID = existingMarker.LessonID
+	}
+	existing, getErr := r.Get(ctx, record.Owner, existingID)
+	if getErr != nil {
+		return outbound.LessonRecord{}, false, getErr
+	}
+	return existing, false, nil
 }
 
 func (r *Repository) Get(ctx context.Context, owner, id string) (outbound.LessonRecord, error) {

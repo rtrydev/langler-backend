@@ -199,3 +199,29 @@ func TestListPaginates(t *testing.T) {
 		t.Errorf("bad cursor error = %v, want ErrInvalidCursor", err)
 	}
 }
+
+func TestSaveIdempotentRejectsChangedContent(t *testing.T) {
+	client := localClient(t)
+	table := createTable(t, client)
+	repo, err := dynamolessons.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	ctx := context.Background()
+	record := sampleRecord("user-1", "44444444-4444-4444-8444-444444444444")
+
+	stored, created, err := repo.SaveIdempotent(ctx, record, "stable-request-key")
+	if err != nil || !created || stored.ContentHash != record.ContentHash {
+		t.Fatalf("first import = %+v created = %v error = %v", stored, created, err)
+	}
+	stored, created, err = repo.SaveIdempotent(ctx, record, "stable-request-key")
+	if err != nil || created || stored.Lesson.ID != record.Lesson.ID {
+		t.Fatalf("replay = %+v created = %v error = %v", stored, created, err)
+	}
+
+	changed := record
+	changed.ContentHash = "hash-2"
+	if _, _, err := repo.SaveIdempotent(ctx, changed, "stable-request-key"); !errors.Is(err, domain.ErrIdempotencyConflict) {
+		t.Fatalf("changed replay error = %v, want %v", err, domain.ErrIdempotencyConflict)
+	}
+}

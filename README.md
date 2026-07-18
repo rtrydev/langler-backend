@@ -8,6 +8,7 @@ Self-contained Go binaries (`bootstrap`) running on AWS Lambda (`provided.al2023
 
 ```
 cmd/api/                    Lambda entrypoint: wires adapters into services (API Gateway HTTP API v2 payload)
+cmd/authorizer/             Lambda entrypoint: validates scoped machine tokens
 internal/domain/            entities, value objects, domain services (pure Go)
 internal/ports/inbound/     use-case interfaces the outside world invokes
 internal/ports/outbound/    capabilities the domain requires from the outside world
@@ -25,6 +26,10 @@ make test
 ```
 
 Infrastructure lives in `langler-tf-infrastructure`, which points at the zip artifacts produced here.
+
+The browser API uses Cognito access tokens. Agent frameworks use a separate
+machine API guarded by expiring, revocable `lang_sk_` tokens; see
+[`docs/agent-authoring.md`](docs/agent-authoring.md).
 
 ## Reference data ETL
 

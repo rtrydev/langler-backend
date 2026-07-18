@@ -20,6 +20,7 @@ type Handler struct {
 	library   inbound.LessonLibrary
 	prompts   inbound.LessonPromptBuilder
 	results   inbound.LessonResultRecorder
+	tokens    inbound.AgentTokenManager
 }
 
 func NewHandler(
@@ -29,6 +30,7 @@ func NewHandler(
 	library inbound.LessonLibrary,
 	prompts inbound.LessonPromptBuilder,
 	results inbound.LessonResultRecorder,
+	tokens inbound.AgentTokenManager,
 ) (*Handler, error) {
 	if status == nil {
 		return nil, errors.New("status provider must not be nil")
@@ -48,7 +50,10 @@ func NewHandler(
 	if results == nil {
 		return nil, errors.New("lesson result recorder must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results}, nil
+	if tokens == nil {
+		return nil, errors.New("agent token manager must not be nil")
+	}
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, tokens: tokens}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -69,6 +74,12 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleLessonPrompt(ctx, req), nil
 	case method == http.MethodPost && path == "/lessons/import":
 		return h.handleLessonImport(ctx, req), nil
+	case method == http.MethodPost && path == "/agent-tokens":
+		return h.handleAgentTokenCreate(ctx, req), nil
+	case method == http.MethodGet && path == "/agent-tokens":
+		return h.handleAgentTokenList(ctx, req), nil
+	case method == http.MethodDelete && strings.HasPrefix(path, "/agent-tokens/"):
+		return h.handleAgentTokenRevoke(ctx, req, strings.TrimPrefix(path, "/agent-tokens/")), nil
 	case method == http.MethodGet && path == "/lessons":
 		return h.handleLessonList(ctx, req), nil
 	case method == http.MethodPost && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
