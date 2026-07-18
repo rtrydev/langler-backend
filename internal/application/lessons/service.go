@@ -23,10 +23,11 @@ type Service struct {
 	checker    outbound.ReferenceChecker
 	reader     outbound.ReferenceReader
 	results    outbound.ResultStore
+	progress   outbound.LessonProgressRecorder
 	now        func() time.Time
 }
 
-func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore) (*Service, error) {
+func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, results outbound.ResultStore, progress outbound.LessonProgressRecorder) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("lesson store must not be nil")
 	}
@@ -39,11 +40,14 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if results == nil {
 		return nil, errors.New("result store must not be nil")
 	}
+	if progress == nil {
+		return nil, errors.New("lesson progress recorder must not be nil")
+	}
 	idempotent, ok := store.(outbound.IdempotentLessonStore)
 	if !ok {
 		return nil, errors.New("lesson store must support idempotent imports")
 	}
-	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, results: results, now: time.Now}, nil
+	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, results: results, progress: progress, now: time.Now}, nil
 }
 
 func (s *Service) Import(ctx context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {
@@ -214,7 +218,10 @@ func (s *Service) Record(ctx context.Context, command inbound.LessonResultComman
 	if err != nil {
 		return domain.Result{}, err
 	}
-	if err := s.results.SaveResult(ctx, outbound.ResultRecord{Owner: command.Owner, Result: result}); err != nil {
+	if err := s.results.SaveResult(ctx, outbound.ResultRecord{Owner: command.Owner, Result: result}); err != nil && !errors.Is(err, domain.ErrAlreadyExists) {
+		return domain.Result{}, err
+	}
+	if err := s.progress.RecordLesson(ctx, command.Owner, record.Lesson, result, command.CompletedOn); err != nil {
 		return domain.Result{}, err
 	}
 	return result, nil

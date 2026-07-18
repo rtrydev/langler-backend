@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -346,16 +346,19 @@ func TestHandleLessonResult(t *testing.T) {
 		Score:       8,
 		MaxScore:    8,
 	}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
-	body := `{"attemptId":"11111111-1111-4111-8111-111111111111","startedAt":"2026-07-18T12:00:00Z","completedAt":"2026-07-18T12:01:00Z","score":8,"maxScore":8,"autoScore":8,"autoMax":8,"selfScore":0,"selfMax":0,"exercises":[{"exerciseId":"ex-1","type":"cloze","grading":"auto","score":8,"maxScore":8,"correct":1,"total":1}]}`
+	body := `{"attemptId":"11111111-1111-4111-8111-111111111111","startedAt":"2026-07-18T12:00:00Z","completedAt":"2026-07-18T12:01:00Z","completedOn":"2026-07-18","score":8,"maxScore":8,"autoScore":8,"autoMax":8,"selfScore":0,"selfMax":0,"exercises":[{"exerciseId":"ex-1","type":"cloze","grading":"auto","score":8,"maxScore":8,"correct":1,"total":1}]}`
 	resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodPost, "/lessons/3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00/results", "user-1", body))
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("StatusCode = %d body %s", resp.StatusCode, resp.Body)
 	}
 	if recorder.command.Owner != "user-1" || recorder.command.Result.LessonID != "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00" {
 		t.Fatalf("command = %+v", recorder.command)
+	}
+	if recorder.command.CompletedOn.Format(time.DateOnly) != "2026-07-18" {
+		t.Fatalf("CompletedOn = %v", recorder.command.CompletedOn)
 	}
 }

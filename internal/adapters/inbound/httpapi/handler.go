@@ -20,6 +20,7 @@ type Handler struct {
 	library   inbound.LessonLibrary
 	prompts   inbound.LessonPromptBuilder
 	results   inbound.LessonResultRecorder
+	progress  inbound.ProgressProvider
 	tokens    inbound.AgentTokenManager
 }
 
@@ -30,6 +31,7 @@ func NewHandler(
 	library inbound.LessonLibrary,
 	prompts inbound.LessonPromptBuilder,
 	results inbound.LessonResultRecorder,
+	progress inbound.ProgressProvider,
 	tokens inbound.AgentTokenManager,
 ) (*Handler, error) {
 	if status == nil {
@@ -50,10 +52,13 @@ func NewHandler(
 	if results == nil {
 		return nil, errors.New("lesson result recorder must not be nil")
 	}
+	if progress == nil {
+		return nil, errors.New("progress provider must not be nil")
+	}
 	if tokens == nil {
 		return nil, errors.New("agent token manager must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, tokens: tokens}, nil
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, progress: progress, tokens: tokens}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -82,6 +87,12 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleAgentTokenRevoke(ctx, req, strings.TrimPrefix(path, "/agent-tokens/")), nil
 	case method == http.MethodGet && path == "/lessons":
 		return h.handleLessonList(ctx, req), nil
+	case method == http.MethodGet && path == "/reviews/due":
+		return h.handleDueReviews(ctx, req), nil
+	case method == http.MethodPost && path == "/reviews/grade":
+		return h.handleReviewGrade(ctx, req), nil
+	case method == http.MethodGet && path == "/progress":
+		return h.handleProgressSummary(ctx, req), nil
 	case method == http.MethodPost && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/lessons/"), "/results")
 		return h.handleLessonResult(ctx, req, id), nil

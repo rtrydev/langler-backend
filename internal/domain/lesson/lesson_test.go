@@ -2,6 +2,7 @@ package lesson_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -211,6 +212,16 @@ func TestNewCollectsIssues(t *testing.T) {
 				l.Exercises[0].ReferencedVocab = []string{"lowercase#bad level"}
 			},
 			wantPath: "exercises[0].referencedVocab[0]",
+		},
+		{
+			name: "too many scheduled references",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[0].ReferencedVocab = make([]string, 100)
+				for index := range l.Exercises[0].ReferencedVocab {
+					l.Exercises[0].ReferencedVocab[index] = "N4#item-" + strconv.Itoa(index)
+				}
+			},
+			wantPath: "exercises",
 		},
 		{
 			name: "multiple choice answer not among options",
