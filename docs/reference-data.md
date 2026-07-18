@@ -106,3 +106,9 @@ are optional filters. Responses are `{"items": [...], "nextCursor": "..."}`;
 `nextCursor` is an opaque pagination token (absent on the last page). `limit`
 defaults to 50, capped at 200. `topic` filters on the `topics` attribute server-side
 within the key-scoped query (a filter expression, not a Scan).
+
+Vocabulary and grammar items additionally expose a stable reference id derived
+from the sort key: `id` = the SK with its `VOCAB#`/`GRAMMAR#` prefix stripped
+(`N4#1311125`, `N5#desu-da`). Lesson imports cite these ids in `referencedVocab`
+and `referencedGrammar` (see `docs/lessons.md`); import validation resolves them
+back to `VOCAB#<id>`/`GRAMMAR#<id>` keys with `BatchGetItem`.

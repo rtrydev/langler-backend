@@ -32,6 +32,7 @@ func (h *Handler) handleVocab(ctx context.Context, params map[string]string) eve
 	items := make([]vocabEntryDTO, 0, len(result.Entries))
 	for _, entry := range result.Entries {
 		items = append(items, vocabEntryDTO{
+			ID:       entry.ID,
 			Headword: entry.Headword,
 			Reading:  entry.Reading,
 			Gloss:    entry.Gloss,
@@ -65,6 +66,7 @@ func (h *Handler) handleGrammar(ctx context.Context, params map[string]string) e
 	items := make([]grammarTopicDTO, 0, len(result.Topics))
 	for _, topic := range result.Topics {
 		items = append(items, grammarTopicDTO{
+			ID:          topic.ID,
 			TopicID:     topic.TopicID,
 			Name:        topic.Name,
 			Level:       string(topic.Level),
@@ -139,6 +141,7 @@ func toExampleDTO(example *domain.Example) *exampleDTO {
 }
 
 type vocabEntryDTO struct {
+	ID       string      `json:"id"`
 	Headword string      `json:"headword"`
 	Reading  string      `json:"reading"`
 	Gloss    []string    `json:"gloss"`
@@ -152,6 +155,7 @@ type vocabEntryDTO struct {
 }
 
 type grammarTopicDTO struct {
+	ID          string      `json:"id"`
 	TopicID     string      `json:"topicId"`
 	Name        string      `json:"name"`
 	Level       string      `json:"level"`

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 
@@ -15,35 +16,60 @@ import (
 type Handler struct {
 	status    inbound.StatusProvider
 	reference inbound.ReferenceProvider
+	importer  inbound.LessonImporter
+	library   inbound.LessonLibrary
+	prompts   inbound.LessonPromptBuilder
 }
 
-func NewHandler(status inbound.StatusProvider, reference inbound.ReferenceProvider) (*Handler, error) {
+func NewHandler(
+	status inbound.StatusProvider,
+	reference inbound.ReferenceProvider,
+	importer inbound.LessonImporter,
+	library inbound.LessonLibrary,
+	prompts inbound.LessonPromptBuilder,
+) (*Handler, error) {
 	if status == nil {
 		return nil, errors.New("status provider must not be nil")
 	}
 	if reference == nil {
 		return nil, errors.New("reference provider must not be nil")
 	}
-	return &Handler{status: status, reference: reference}, nil
+	if importer == nil {
+		return nil, errors.New("lesson importer must not be nil")
+	}
+	if library == nil {
+		return nil, errors.New("lesson library must not be nil")
+	}
+	if prompts == nil {
+		return nil, errors.New("lesson prompt builder must not be nil")
+	}
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	method := req.RequestContext.HTTP.Method
-	slog.InfoContext(ctx, "request", "method", method, "path", req.RawPath)
+	path := strings.TrimSuffix(req.RawPath, "/")
+	slog.InfoContext(ctx, "request", "method", method, "path", path)
 
-	if method != http.MethodGet {
-		return errorJSON(http.StatusMethodNotAllowed, "method not allowed"), nil
-	}
-
-	switch req.RawPath {
-	case "/hello":
+	switch {
+	case method == http.MethodGet && path == "/hello":
 		return h.handleStatus(ctx), nil
-	case "/reference/vocab":
+	case method == http.MethodGet && path == "/reference/vocab":
 		return h.handleVocab(ctx, req.QueryStringParameters), nil
-	case "/reference/grammar":
+	case method == http.MethodGet && path == "/reference/grammar":
 		return h.handleGrammar(ctx, req.QueryStringParameters), nil
-	case "/reference/scripts":
+	case method == http.MethodGet && path == "/reference/scripts":
 		return h.handleScripts(ctx, req.QueryStringParameters), nil
+	case method == http.MethodPost && path == "/lessons/prompt":
+		return h.handleLessonPrompt(ctx, req), nil
+	case method == http.MethodPost && path == "/lessons/import":
+		return h.handleLessonImport(ctx, req), nil
+	case method == http.MethodGet && path == "/lessons":
+		return h.handleLessonList(ctx, req), nil
+	case method == http.MethodGet && strings.HasPrefix(path, "/lessons/"):
+		return h.handleLessonGet(ctx, req, strings.TrimPrefix(path, "/lessons/")), nil
+	case method == http.MethodDelete && strings.HasPrefix(path, "/lessons/"):
+		return h.handleLessonDelete(ctx, req, strings.TrimPrefix(path, "/lessons/")), nil
 	default:
 		return errorJSON(http.StatusNotFound, "not found"), nil
 	}
