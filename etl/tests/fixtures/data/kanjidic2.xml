@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kanjidic2>
+<header>
+<file_version>4</file_version>
+<database_version>2026-190</database_version>
+<date_of_creation>2026-07-09</date_of_creation>
+</header>
+<character>
+<literal>水</literal>
+<codepoint>
+<cp_value cp_type="ucs">6c34</cp_value>
+</codepoint>
+<radical>
+<rad_value rad_type="classical">85</rad_value>
+</radical>
+<misc>
+<grade>1</grade>
+<stroke_count>4</stroke_count>
+<freq>223</freq>
+<jlpt>4</jlpt>
+</misc>
+<reading_meaning>
+<rmgroup>
+<reading r_type="pinyin">shui3</reading>
+<reading r_type="ja_on">スイ</reading>
+<reading r_type="ja_kun">みず</reading>
+<reading r_type="ja_kun">みず-</reading>
+<meaning>water</meaning>
+<meaning m_lang="fr">eau</meaning>
+</rmgroup>
+<nanori>うず</nanori>
+</reading_meaning>
+</character>
+<character>
+<literal>者</literal>
+<codepoint>
+<cp_value cp_type="ucs">8005</cp_value>
+</codepoint>
+<radical>
+<rad_value rad_type="classical">125</rad_value>
+</radical>
+<misc>
+<grade>3</grade>
+<stroke_count>8</stroke_count>
+<freq>35</freq>
+<jlpt>2</jlpt>
+</misc>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_on">シャ</reading>
+<reading r_type="ja_kun">もの</reading>
+<meaning>someone</meaning>
+<meaning>person</meaning>
+<meaning m_lang="es">alguien</meaning>
+</rmgroup>
+</reading_meaning>
+</character>
+<character>
+<literal>亜</literal>
+<codepoint>
+<cp_value cp_type="ucs">4e9c</cp_value>
+</codepoint>
+<radical>
+<rad_value rad_type="classical">7</rad_value>
+</radical>
+<misc>
+<grade>8</grade>
+<stroke_count>7</stroke_count>
+<freq>1509</freq>
+<jlpt>1</jlpt>
+</misc>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_on">ア</reading>
+<reading r_type="ja_kun">つ.ぐ</reading>
+<meaning>Asia</meaning>
+<meaning>rank next</meaning>
+<meaning>come after</meaning>
+<meaning m_lang="fr">Asie</meaning>
+</rmgroup>
+</reading_meaning>
+</character>
+<character>
+<literal>凰</literal>
+<codepoint>
+<cp_value cp_type="ucs">51f0</cp_value>
+</codepoint>
+<radical>
+<rad_value rad_type="classical">16</rad_value>
+</radical>
+<misc>
+<stroke_count>11</stroke_count>
+</misc>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_on">オウ</reading>
+<meaning>female phoenix bird</meaning>
+</rmgroup>
+</reading_meaning>
+</character>
+</kanjidic2>

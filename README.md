@@ -2,7 +2,7 @@
 
 Go backend for [Langler](https://langler.rtrydev.com) — an invitation-only, BYOAI language-learning app for Japanese, Burmese, and Polish.
 
-Self-contained Go binaries (`bootstrap`) running on AWS Lambda (`provided.al2023`, arm64) behind an API Gateway HTTP API. One Lambda per route group under `cmd/`. Storage is a DynamoDB single table. This repo will also host the offline Python ETL for reference data under `tools/` (not yet scaffolded).
+Self-contained Go binaries (`bootstrap`) running on AWS Lambda (`provided.al2023`, arm64) behind an API Gateway HTTP API. One Lambda per route group under `cmd/`. Storage is a DynamoDB single table. This repo also hosts the offline Python ETL for reference data under `etl/`.
 
 ## Layout
 
@@ -25,3 +25,7 @@ make test
 ```
 
 Infrastructure lives in `langler-tf-infrastructure`, which points at the zip artifacts produced here.
+
+## Reference data ETL
+
+The offline Python pipeline that ingests the Japanese reference sources (JMdict, KANJIDIC2, KanjiVG, KRADFILE, Tanaka/Tatoeba examples, JLPT lists) and loads the DynamoDB reference partition and the assets bucket lives in [`etl/`](etl/README.md). Refresh sequence: `langler-etl download` → `build` → `load`.

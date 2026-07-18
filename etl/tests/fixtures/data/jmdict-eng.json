@@ -1,0 +1,180 @@
+{
+  "version": "3.6.2",
+  "languages": ["eng"],
+  "commonOnly": false,
+  "dictDate": "2026-07-13",
+  "dictRevisions": ["1.09"],
+  "tags": {"n": "noun (common) (futsuumeishi)", "v5u": "Godan verb with 'u' ending"},
+  "words": [
+    {
+      "id": "1206900",
+      "kanji": [{"common": true, "text": "学校", "tags": []}],
+      "kana": [{"common": true, "text": "がっこう", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "school"}]
+        }
+      ]
+    },
+    {
+      "id": "1466420",
+      "kanji": [{"common": true, "text": "犬", "tags": []}],
+      "kana": [{"common": true, "text": "いぬ", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "dog"}]
+        },
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": ["derog"],
+          "info": [],
+          "languageSource": [],
+          "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "snitch"}]
+        }
+      ]
+    },
+    {
+      "id": "1198880",
+      "kanji": [
+        {"common": true, "text": "会う", "tags": []},
+        {"common": false, "text": "逢う", "tags": []}
+      ],
+      "kana": [{"common": true, "text": "あう", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["v5u", "vi"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [
+            {"lang": "eng", "gender": null, "type": null, "text": "to meet"},
+            {"lang": "eng", "gender": null, "type": null, "text": "to encounter"},
+            {"lang": "eng", "gender": null, "type": null, "text": "to see"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1565440",
+      "kanji": [],
+      "kana": [{"common": true, "text": "ああ", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["int"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [
+            {"lang": "eng", "gender": null, "type": null, "text": "ah!"},
+            {"lang": "eng", "gender": null, "type": null, "text": "oh!"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1250090",
+      "kanji": [{"common": true, "text": "経済", "tags": []}],
+      "kana": [{"common": true, "text": "けいざい", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "economy"}]
+        }
+      ]
+    },
+    {
+      "id": "1341350",
+      "kanji": [{"common": true, "text": "辞書", "tags": []}],
+      "kana": [{"common": true, "text": "じしょ", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [
+            {"lang": "eng", "gender": null, "type": null, "text": "dictionary"},
+            {"lang": "eng", "gender": null, "type": null, "text": "lexicon"},
+            {"lang": "eng", "gender": null, "type": null, "text": "wordbook"},
+            {"lang": "eng", "gender": null, "type": null, "text": "glossary"},
+            {"lang": "eng", "gender": null, "type": null, "text": "vocabulary list"},
+            {"lang": "eng", "gender": null, "type": null, "text": "concordance"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1467640",
+      "kanji": [{"common": true, "text": "猫", "tags": []}],
+      "kana": [{"common": true, "text": "ねこ", "tags": [], "appliesToKanji": ["*"]}],
+      "sense": [
+        {
+          "partOfSpeech": ["n"],
+          "appliesToKanji": ["*"],
+          "appliesToKana": ["*"],
+          "related": [],
+          "antonym": [],
+          "field": [],
+          "dialect": [],
+          "misc": [],
+          "info": [],
+          "languageSource": [],
+          "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "cat"}]
+        }
+      ]
+    }
+  ]
+}
