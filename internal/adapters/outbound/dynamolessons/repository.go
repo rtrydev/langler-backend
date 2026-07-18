@@ -104,6 +104,9 @@ func (r *Repository) SaveIdempotent(ctx context.Context, record outbound.LessonR
 		if err := attributevalue.UnmarshalMap(markerOut.Item, &existingMarker); err != nil {
 			return outbound.LessonRecord{}, false, fmt.Errorf("%w: unmarshal idempotency marker: %v", domain.ErrStorageFailure, err)
 		}
+		if existingMarker.ContentHash != record.ContentHash {
+			return outbound.LessonRecord{}, false, domain.ErrIdempotencyConflict
+		}
 		existingID = existingMarker.LessonID
 	}
 	existing, getErr := r.Get(ctx, record.Owner, existingID)

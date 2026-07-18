@@ -139,6 +139,20 @@ func TestHandleLessonImport(t *testing.T) {
 		}
 	})
 
+	t.Run("maps conflicting idempotency replay to conflict", func(t *testing.T) {
+		t.Parallel()
+
+		importer := &fakeLessonImporter{err: lesson.ErrIdempotencyConflict}
+		h := newLessonHandler(t, importer, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
+		resp, err := h.Handle(context.Background(), lessonRequest(http.MethodPost, "/lessons/import", "user-1", validLessonBody))
+		if err != nil {
+			t.Fatalf("Handle: %v", err)
+		}
+		if resp.StatusCode != http.StatusConflict || !strings.Contains(resp.Body, "idempotency key") {
+			t.Fatalf("response = %+v", resp)
+		}
+	})
+
 	t.Run("rejects malformed json with a readable issue", func(t *testing.T) {
 		t.Parallel()
 

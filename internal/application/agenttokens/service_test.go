@@ -95,15 +95,15 @@ func TestAuthorizeEnforcesScopeExpiryRevocationAndRateLimit(t *testing.T) {
 	tests := []struct {
 		name    string
 		token   func(agenttoken.Token) agenttoken.Token
-		route   string
+		scope   agenttoken.Scope
 		limiter error
 		wantErr bool
 	}{
-		{name: "allows scoped request", token: func(token agenttoken.Token) agenttoken.Token { return token }, route: "GET /reference/vocab"},
-		{name: "rejects missing scope", token: func(token agenttoken.Token) agenttoken.Token { return token }, route: "POST /lessons/import", wantErr: true},
-		{name: "rejects expired", token: func(token agenttoken.Token) agenttoken.Token { token.ExpiresAt = now; return token }, route: "GET /reference/vocab", wantErr: true},
-		{name: "rejects revoked", token: func(token agenttoken.Token) agenttoken.Token { token.RevokedAt = now.Add(-time.Minute); return token }, route: "GET /reference/vocab", wantErr: true},
-		{name: "rejects rate limited", token: func(token agenttoken.Token) agenttoken.Token { return token }, route: "GET /reference/vocab", limiter: agenttoken.ErrRateLimited, wantErr: true},
+		{name: "allows scoped request", token: func(token agenttoken.Token) agenttoken.Token { return token }, scope: agenttoken.ScopeReadReference},
+		{name: "rejects missing scope", token: func(token agenttoken.Token) agenttoken.Token { return token }, scope: agenttoken.ScopeImportLessons, wantErr: true},
+		{name: "rejects expired", token: func(token agenttoken.Token) agenttoken.Token { token.ExpiresAt = now; return token }, scope: agenttoken.ScopeReadReference, wantErr: true},
+		{name: "rejects revoked", token: func(token agenttoken.Token) agenttoken.Token { token.RevokedAt = now.Add(-time.Minute); return token }, scope: agenttoken.ScopeReadReference, wantErr: true},
+		{name: "rejects rate limited", token: func(token agenttoken.Token) agenttoken.Token { return token }, scope: agenttoken.ScopeReadReference, limiter: agenttoken.ErrRateLimited, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestAuthorizeEnforcesScopeExpiryRevocationAndRateLimit(t *testing.T) {
 				t.Fatalf("NewService: %v", err)
 			}
 			service.now = func() time.Time { return now }
-			result, err := service.Authorize(context.Background(), "Bearer lang_sk_secret", test.route)
+			result, err := service.Authorize(context.Background(), "lang_sk_secret", test.scope)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("Authorize error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -124,12 +124,12 @@ func TestAuthorizeEnforcesScopeExpiryRevocationAndRateLimit(t *testing.T) {
 	}
 }
 
-func TestAuthorizeRejectsMalformedBearerToken(t *testing.T) {
+func TestAuthorizeRejectsMalformedToken(t *testing.T) {
 	service, err := NewService(&fakeStore{}, fakeLimiter{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	_, err = service.Authorize(context.Background(), "Bearer jwt", "GET /reference/vocab")
+	_, err = service.Authorize(context.Background(), "jwt", agenttoken.ScopeReadReference)
 	if !errors.Is(err, agenttoken.ErrInvalidToken) {
 		t.Fatalf("error = %v", err)
 	}

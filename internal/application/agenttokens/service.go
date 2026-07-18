@@ -16,8 +16,6 @@ import (
 	"github.com/rtrydev/langler-backend/internal/ports/outbound"
 )
 
-const requestsPerMinute = 60
-
 type Service struct {
 	store   outbound.AgentTokenStore
 	limiter outbound.AgentTokenRateLimiter
@@ -52,7 +50,7 @@ func (s *Service) Create(ctx context.Context, command inbound.AgentTokenCreateCo
 	if _, err := s.random(secretBytes); err != nil {
 		return inbound.AgentTokenCreated{}, fmt.Errorf("generate agent token secret: %w", err)
 	}
-	secret := "lang_sk_" + base64.RawURLEncoding.EncodeToString(secretBytes)
+	secret := agenttoken.SecretPrefix + base64.RawURLEncoding.EncodeToString(secretBytes)
 	token, err := agenttoken.New(id, command.Owner, command.Label, secret[len(secret)-4:], scopes, now, command.ExpiresAt)
 	if err != nil {
 		return inbound.AgentTokenCreated{}, err
@@ -89,9 +87,8 @@ func (s *Service) Revoke(ctx context.Context, owner, id string) error {
 	return s.store.Revoke(ctx, owner, id, s.now().UTC())
 }
 
-func (s *Service) Authorize(ctx context.Context, authorization, routeKey string) (inbound.MachineAuthorization, error) {
-	secret, ok := strings.CutPrefix(strings.TrimSpace(authorization), "Bearer ")
-	if !ok || !strings.HasPrefix(secret, "lang_sk_") {
+func (s *Service) Authorize(ctx context.Context, secret string, requiredScope agenttoken.Scope) (inbound.MachineAuthorization, error) {
+	if len(secret) <= len(agenttoken.SecretPrefix) || !strings.HasPrefix(secret, agenttoken.SecretPrefix) {
 		return inbound.MachineAuthorization{}, agenttoken.ErrInvalidToken
 	}
 	hash := sha256.Sum256([]byte(secret))
@@ -103,26 +100,14 @@ func (s *Service) Authorize(ctx context.Context, authorization, routeKey string)
 	if !token.Active(now) {
 		return inbound.MachineAuthorization{}, agenttoken.ErrInvalidToken
 	}
-	required, ok := requiredScope(routeKey)
-	if !ok || !token.HasScope(required) {
+	if !token.HasScope(requiredScope) {
 		return inbound.MachineAuthorization{}, agenttoken.ErrInvalidToken
 	}
-	if err := s.limiter.Consume(ctx, token.ID, now.Truncate(time.Minute), requestsPerMinute); err != nil {
+	if err := s.limiter.Consume(ctx, token.ID, now.Truncate(time.Minute), agenttoken.RequestsPerMinute); err != nil {
 		return inbound.MachineAuthorization{}, err
 	}
 	if err := s.store.Touch(ctx, token, now); err != nil {
 		return inbound.MachineAuthorization{}, err
 	}
 	return inbound.MachineAuthorization{Owner: token.Owner, TokenID: token.ID}, nil
-}
-
-func requiredScope(routeKey string) (agenttoken.Scope, bool) {
-	switch routeKey {
-	case "GET /reference/vocab", "GET /reference/grammar", "GET /reference/scripts":
-		return agenttoken.ScopeReadReference, true
-	case "POST /lessons/import":
-		return agenttoken.ScopeImportLessons, true
-	default:
-		return "", false
-	}
 }

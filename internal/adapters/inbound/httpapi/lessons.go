@@ -391,6 +391,8 @@ func lessonError(ctx context.Context, err error) events.APIGatewayV2HTTPResponse
 		return errorJSON(http.StatusBadRequest, err.Error())
 	case errors.Is(err, lesson.ErrAlreadyExists):
 		return errorJSON(http.StatusConflict, "lesson result already exists")
+	case errors.Is(err, lesson.ErrIdempotencyConflict):
+		return errorJSON(http.StatusConflict, lesson.ErrIdempotencyConflict.Error())
 	case errors.Is(err, lesson.ErrInvalidOwner):
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}

@@ -65,9 +65,10 @@ tolerated and ignored). Payload shapes by type:
    language (`BatchGetItem` on `REF#<lang>` / `VOCAB#<id>`·`GRAMMAR#<id>`).
 6. **Idempotency**: `POST /lessons/import` requires an `Idempotency-Key` header.
    A transaction creates both the lesson and a user-scoped marker containing the
-   lesson id. Reusing the key returns that original lesson (`"created": false`),
-   even if the retry body changes. The SHA-256 of the raw import body is stored as
-   `contentHash`; the idempotency key itself is SHA-256 hashed before storage.
+   lesson id. Reusing the key with the same body returns that original lesson
+   (`"created": false`); reusing it with different content returns `409`. The
+   SHA-256 of the raw import body is stored as `contentHash`; the idempotency key
+   itself is SHA-256 hashed before storage.
 
 Failures return `400 {"error": "lesson validation failed", "issues": [{"path",
 "message"}]}` with all issues collected in one pass, so the user can paste the

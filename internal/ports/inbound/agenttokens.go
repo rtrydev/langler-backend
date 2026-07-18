@@ -31,5 +31,5 @@ type MachineAuthorization struct {
 }
 
 type MachineAuthorizer interface {
-	Authorize(ctx context.Context, authorization, routeKey string) (MachineAuthorization, error)
+	Authorize(ctx context.Context, secret string, requiredScope agenttoken.Scope) (MachineAuthorization, error)
 }

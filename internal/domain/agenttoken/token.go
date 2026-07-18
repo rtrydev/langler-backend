@@ -13,6 +13,8 @@ type Scope string
 const (
 	ScopeReadReference Scope = "read-reference"
 	ScopeImportLessons Scope = "import-lessons"
+	SecretPrefix             = "lang_sk_"
+	RequestsPerMinute        = 60
 )
 
 var (

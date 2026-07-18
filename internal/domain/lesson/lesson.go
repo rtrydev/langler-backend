@@ -10,12 +10,13 @@ import (
 const SchemaVersion = "1.0"
 
 var (
-	ErrNotFound        = errors.New("lesson not found")
-	ErrAlreadyExists   = errors.New("lesson already exists")
-	ErrStorageFailure  = errors.New("lesson storage failed")
-	ErrInvalidOwner    = errors.New("owner must not be empty")
-	ErrInvalidLessonID = errors.New("lesson id must be a UUID")
-	ErrInvalidCursor   = errors.New("cursor is not a valid pagination token")
+	ErrNotFound            = errors.New("lesson not found")
+	ErrAlreadyExists       = errors.New("lesson already exists")
+	ErrStorageFailure      = errors.New("lesson storage failed")
+	ErrInvalidOwner        = errors.New("owner must not be empty")
+	ErrInvalidLessonID     = errors.New("lesson id must be a UUID")
+	ErrInvalidCursor       = errors.New("cursor is not a valid pagination token")
+	ErrIdempotencyConflict = errors.New("idempotency key was already used for different lesson content")
 )
 
 type Language string

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 
+	"github.com/rtrydev/langler-backend/internal/domain/agenttoken"
 	"github.com/rtrydev/langler-backend/internal/ports/inbound"
 )
 
@@ -30,7 +31,12 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2CustomAutho
 			break
 		}
 	}
-	result, err := h.authorizer.Authorize(ctx, authorization, req.RouteKey)
+	secret, ok := strings.CutPrefix(strings.TrimSpace(authorization), "Bearer ")
+	requiredScope, scoped := requiredScope(req.RouteKey)
+	if !ok || !scoped {
+		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
+	}
+	result, err := h.authorizer.Authorize(ctx, secret, requiredScope)
 	if err != nil {
 		slog.WarnContext(ctx, "machine request denied", "route", req.RouteKey, "error", err)
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
@@ -39,4 +45,15 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2CustomAutho
 		IsAuthorized: true,
 		Context:      map[string]interface{}{"owner": result.Owner, "tokenId": result.TokenID},
 	}, nil
+}
+
+func requiredScope(routeKey string) (agenttoken.Scope, bool) {
+	switch routeKey {
+	case "GET /reference/vocab", "GET /reference/grammar", "GET /reference/scripts":
+		return agenttoken.ScopeReadReference, true
+	case "POST /lessons/import":
+		return agenttoken.ScopeImportLessons, true
+	default:
+		return "", false
+	}
 }
