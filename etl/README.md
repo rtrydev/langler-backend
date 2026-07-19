@@ -1,6 +1,6 @@
 # langler-etl
 
-Offline, run-on-demand ETL that ingests the Japanese and Polish reference sources, normalizes them
+Offline, run-on-demand ETL that ingests the Japanese, Burmese, and Polish reference sources, normalizes them
 to the item contract in [`docs/reference-data.md`](../docs/reference-data.md), and loads
 the DynamoDB reference partition (`PK=REF#ja`) plus the KanjiVG stroke SVGs in the
 assets S3 bucket. Re-running it is idempotent: keys are deterministic and every load is
@@ -26,6 +26,11 @@ an overwrite in place.
 | Polish certification curriculum | https://certyfikatpolski.pl/wp-content/uploads/2018/05/rozp_26_2_16.pdf | Official legal text (Dz.U. 2016 poz. 405) | State adult A1–C2 grammar inventories |
 | Morfeusz 2 with SGJP data | https://morfeusz.sgjp.pl/ | BSD-2-Clause | Institute of Computer Science PAS and SGJP authors |
 | Polish grammar, topics, and orthography notes | `langler_etl/data/{grammar,topics,orthography}_pl.json` | CC BY-SA 4.0 / CC0 | Langler project, hand-reviewed original wording mapped to the certification curriculum |
+| Kaikki Burmese / Wiktextract | https://kaikki.org/dictionary/Burmese/ | CC BY-SA 4.0 + GFDL | Kaikki.org, Wiktionary contributors, Tatu Ylonen |
+| myG2P headwords | https://github.com/ye-kyaw-thu/myG2P | CC BY-NC-SA 4.0 | Ye Kyaw Thu |
+| Myanmar-C4 frequency lexicon | https://huggingface.co/datasets/chuuhtetnaing/myanmar-c4-dataset | ODC-BY 1.0 | C4 counts prepared by the myanmar-ime corpus builder |
+| myWord n-grams | https://github.com/ye-kyaw-thu/myWord | GPL-3.0 | Ye Kyaw Thu; pruned client segmentation asset |
+| Burmese grammar, topics, and script inventory | `langler_etl/data/{grammar,topics,script}_my.json` | CC BY-SA 4.0 / CC0 | Langler project, hand-reviewed A1–B1 grammar and myanmar-ime-aligned romanization |
 
 The same registry lives in `langler_etl/sources.py`; every emitted record pulls its
 `sourceId`/`license` from there, and `manifest.json` in the build output records the
@@ -53,6 +58,7 @@ langler-etl download                 # cache all sources into etl/.data/ (skips 
 langler-etl build                    # normalize into etl/.build/ (JSONL + SVG assets + manifest.json)
 langler-etl load --language ja --table <table> --assets-bucket <bucket>
 langler-etl load --language pl --table <table> --assets-bucket <bucket>
+langler-etl load --language my --table <table> --assets-bucket <bucket>
 langler-etl load --language pl --kind grammar --table <table>
 ```
 
@@ -68,11 +74,26 @@ Polish grammar topics are stored only at their first certification level, valida
 against Morfeusz during the build, and served cumulatively through the requested CEFR
 level.
 
+For Burmese, `download --language my` fetches Kaikki and myG2P v2. Copy the myanmar-ime
+`BurmeseLexiconSource.tsv` corpus-builder artifact and myangler-web `ngram.json`
+into `.data/` before building. Every string passes through `myanmar-tools`
+Zawgyi detection, conversion when needed, and NFC cleanup. The full n-gram model
+stays offline; the build emits a frequency-pruned
+`assets/burmese/myword-ngram.json`. Optional reading corpora live under
+`.data/readings-my/` with a `manifest.json` containing `{file, sourceId, license}`
+for each JSONL source. Accepted pairs are Myanmar C4 or FineWeb2 with `ODC-BY 1.0`,
+Myanmar Wikipedia with `CC BY-SA 3.0 and GFDL`, and Myanmar FLORES with
+`CC BY-SA 4.0`. CulturaX accepts `ODC-BY 1.0` only for rows whose `source` is
+`mC4`; OSCAR rows remain excluded because only their packaging and metadata are
+CC0. The build rejects every other source/license pair, then retains passages with
+at least 80% frequency-lexicon coverage and labels their difficulty approximate.
+
 - `download` resolves the latest jmdict-simplified and KanjiVG releases via the GitHub
   API; delete a file from `.data/` to force a re-download.
 - `build` writes `reference/<lang>/{vocab,grammar,scripts,topics}.jsonl` already in final DynamoDB
   item shape, `assets/kanjivg/*.svg` for exactly the ingested kanji, and
-  `manifest.json` with per-level counts and the source audit trail.
+  `assets/burmese/myword-ngram.json` when its source is present, and language
+  manifests with per-level counts and the source audit trail.
 - `load` batch-upserts the selected language's JSONL records (PutItem overwrite
   semantics) throttled to `--write-rate` items/sec (default 20, sized for a 25 WCU
   table). When `--assets-bucket` is set, it syncs that language's embedding index and
@@ -84,6 +105,6 @@ Required AWS permissions for `load`:
 
 - `dynamodb:BatchWriteItem` and `dynamodb:PutItem` on the target table
 - `s3:PutObject` on `arn:aws:s3:::<assets-bucket>/kanjivg/*` (only when
-  `--assets-bucket` is given), plus `arn:aws:s3:::<assets-bucket>/embeddings/*`
+  `--assets-bucket` is given), plus `arn:aws:s3:::<assets-bucket>/{burmese,embeddings}/*`
 
 Credentials come from the standard AWS SDK chain (`AWS_PROFILE`, environment, SSO).

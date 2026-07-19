@@ -86,6 +86,7 @@ const (
 
 var scriptHooks = map[Language]func(*collector, Lesson){
 	"ja": japaneseIssues,
+	"my": burmeseIssues,
 	"pl": polishIssues,
 }
 

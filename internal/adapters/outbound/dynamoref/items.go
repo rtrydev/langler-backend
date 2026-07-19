@@ -117,6 +117,23 @@ type scriptItem struct {
 	License       string              `dynamodbav:"license"`
 }
 
+type readingItem struct {
+	SK               string  `dynamodbav:"SK"`
+	Text             string  `dynamodbav:"text"`
+	Level            string  `dynamodbav:"level"`
+	LevelApproximate bool    `dynamodbav:"levelApproximate"`
+	Coverage         float64 `dynamodbav:"coverage"`
+	SourceID         string  `dynamodbav:"sourceId"`
+	License          string  `dynamodbav:"license"`
+}
+
+func (r readingItem) toDomain() domain.ReadingPassage {
+	return domain.ReadingPassage{
+		ID: strings.TrimPrefix(r.SK, "READING#"), Text: r.Text, Level: domain.Level(r.Level),
+		LevelApproximate: r.LevelApproximate, Coverage: r.Coverage, SourceID: r.SourceID, License: r.License,
+	}
+}
+
 func (s scriptItem) toDomain() domain.ScriptGlyph {
 	return domain.ScriptGlyph{
 		Glyph:         s.Glyph,

@@ -38,6 +38,20 @@ def sync_assets(s3, bucket: str, assets_dir: Path) -> int:
     return count
 
 
+def sync_burmese_assets(s3, bucket: str, assets_dir: Path) -> int:
+    count = 0
+    for path in sorted(assets_dir.glob("*.json")):
+        s3.put_object(
+            Bucket=bucket,
+            Key=f"burmese/{path.name}",
+            Body=path.read_bytes(),
+            ContentType="application/json; charset=utf-8",
+            CacheControl="public, max-age=31536000, immutable",
+        )
+        count += 1
+    return count
+
+
 def sync_embeddings(s3, bucket: str, embeddings_dir: Path, language: str = "all") -> int:
     count = 0
     paths = (
@@ -83,6 +97,8 @@ def run(
         s3 = boto3.client("s3")
         if language in {"ja", "all"}:
             uploaded = sync_assets(s3, bucket, out_dir / "assets" / "kanjivg")
+        if language in {"my", "all"}:
+            uploaded += sync_burmese_assets(s3, bucket, out_dir / "assets" / "burmese")
         embeddings_dir = out_dir / "embeddings"
         if embeddings_dir.is_dir():
             uploaded += sync_embeddings(s3, bucket, embeddings_dir, language)

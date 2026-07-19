@@ -117,3 +117,13 @@ type ScriptGlyph struct {
 	SourceID      string
 	License       string
 }
+
+type ReadingPassage struct {
+	ID               string
+	Text             string
+	Level            Level
+	LevelApproximate bool
+	Coverage         float64
+	SourceID         string
+	License          string
+}

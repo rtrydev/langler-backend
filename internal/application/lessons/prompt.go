@@ -397,6 +397,10 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 			fmt.Fprintf(&b, "- Write idiomatic contemporary Polish, not sentence-by-sentence English calques. Keep function words and inflection natural while maximizing coverage by the supplied CEFR-banded vocabulary; treat the CEFR labels as frequency-based approximations.\n")
 			fmt.Fprintf(&b, "- Keep at least 85%% of content-word occurrences within the selected level or easier. A higher-level word is allowed only when the story cannot remain natural without it, and should be annotated.\n\n")
 		}
+		if request.language == "my" {
+			fmt.Fprintf(&b, "- Write natural contemporary Burmese in canonical Unicode, never Zawgyi. Treat the CEFR labels as approximate frequency bands, and keep at least 85%% of segmented content words at the selected band or easier.\n")
+			fmt.Fprintf(&b, "- Put the supplied Hybrid Burmese romanization in annotation readings. Annotate each new word once; do not insert romanization into the Burmese passage itself.\n\n")
+		}
 		fmt.Fprintf(&b, "## Teaching flow\n")
 		fmt.Fprintf(&b, "This is the learner's first encounter with the material; the lesson teaches, it does not quiz prior knowledge.\n")
 		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching, multiple choice, and script practice before cloze, cloze before ordering, translation and writing last.\n")
@@ -408,6 +412,9 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 		fmt.Fprintf(&b, "This learner cannot decode connected text yet. Do not include any \"reading\" exercise or story.\n")
 		fmt.Fprintf(&b, "Focus on script practice, individual words, and very short sentences that build glyph recognition and sound-script associations.\n")
 		fmt.Fprintf(&b, "Introduce every glyph or word first (script practice or matching that shows its reading and meaning) before any exercise asks the learner to recall it, and raise the difficulty gradually.\n")
+		if request.language == "my" {
+			fmt.Fprintf(&b, "Use script_practice items with a Burmese character or short legal syllable, its Hybrid Burmese romanization, and its sound or meaning. Store canonical Unicode and never emit an unattached combining mark inside a word.\n")
+		}
 		fmt.Fprintf(&b, "Set \"readingStage\": \"foundational\" in the output.\n\n")
 	}
 
@@ -461,6 +468,10 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 		fmt.Fprintf(&b, "- script_practice: Polish orthography only. Use choice items {\"kind\": \"choice\", \"glyph\": \"<sentence or cue with a blank>\", \"meaning\": \"<brief rule hint>\", \"options\": [\"<correct spelling>\", \"<plausible contrast>\"], \"answer\": \"<must exactly equal one option>\"} and dictation-style recall items {\"kind\": \"dictation\", \"glyph\": \"<definition or cloze cue; no audio>\", \"meaning\": \"<optional contrast hint>\", \"answer\": \"<correct Polish word>\"}. Exercise ó/u, rz/ż, ch/h, Polish diacritics, or digraphs; never use tracing or stroke-order tasks.\n\n")
 	} else {
 		fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n\n")
+	}
+	if request.language == "my" {
+		fmt.Fprintf(&b, "- Every Burmese string must use canonical Unicode, never Zawgyi, and must contain only orthographically legal medial, vowel, tone, asat, kinzi, and virama combinations.\n")
+		fmt.Fprintf(&b, "- Reading annotations and script-practice readings use the supplied Hybrid Burmese romanization exactly; romanization is a learner-controlled aid, not part of Burmese running text.\n")
 	}
 	fmt.Fprintf(&b, "## Constraints\n")
 	fmt.Fprintf(&b, "- Plain text only in every string: no HTML, no markdown, no control characters.\n")

@@ -196,6 +196,43 @@ func TestHandleScripts(t *testing.T) {
 	}
 }
 
+func TestHandleReadings(t *testing.T) {
+	t.Parallel()
+	provider := &fakeReferenceProvider{readings: inbound.ReadingResult{
+		Passages: []domain.ReadingPassage{{
+			ID: "A2#story", Text: "မနက်ခင်းမှာ မေ ဈေးကို သွားတယ်။", Level: "A2",
+			LevelApproximate: true, Coverage: 0.92, SourceID: "myanmar-wikipedia", License: "CC BY-SA 4.0",
+		}},
+		NextCursor: "more",
+	}}
+	h := newHandler(t, fakeStatusProvider{}, provider)
+	response, err := h.Handle(context.Background(), getRequest("/reference/readings", map[string]string{
+		"lang": "my", "level": "A2", "limit": "10",
+	}))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body %s", response.StatusCode, response.Body)
+	}
+	if provider.readingQuery != (inbound.ReadingQuery{Language: "my", Level: "A2", Limit: 10}) {
+		t.Errorf("query = %+v", provider.readingQuery)
+	}
+	var body struct {
+		Items []struct {
+			Text     string  `json:"text"`
+			Coverage float64 `json:"coverage"`
+		} `json:"items"`
+		NextCursor string `json:"nextCursor"`
+	}
+	if err := json.Unmarshal([]byte(response.Body), &body); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Coverage != 0.92 || body.NextCursor != "more" {
+		t.Errorf("body = %+v", body)
+	}
+}
+
 func TestReferenceErrorMapping(t *testing.T) {
 	t.Parallel()
 

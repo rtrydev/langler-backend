@@ -117,6 +117,27 @@ func (h *Handler) handleScripts(ctx context.Context, params map[string]string) e
 	return respondJSON(http.StatusOK, pageResponse[scriptGlyphDTO]{Items: items, NextCursor: result.NextCursor})
 }
 
+func (h *Handler) handleReadings(ctx context.Context, params map[string]string) events.APIGatewayV2HTTPResponse {
+	limit, ok := parseLimit(params["limit"])
+	if !ok {
+		return errorJSON(http.StatusBadRequest, "limit must be a positive integer")
+	}
+	result, err := h.reference.Readings(ctx, inbound.ReadingQuery{
+		Language: params["lang"], Level: params["level"], Limit: limit, Cursor: params["cursor"],
+	})
+	if err != nil {
+		return referenceError(ctx, err)
+	}
+	items := make([]readingPassageDTO, 0, len(result.Passages))
+	for _, passage := range result.Passages {
+		items = append(items, readingPassageDTO{
+			ID: passage.ID, Text: passage.Text, Level: string(passage.Level), LevelApproximate: passage.LevelApproximate,
+			Coverage: passage.Coverage, SourceID: passage.SourceID, License: passage.License,
+		})
+	}
+	return respondJSON(http.StatusOK, pageResponse[readingPassageDTO]{Items: items, NextCursor: result.NextCursor})
+}
+
 type pageResponse[T any] struct {
 	Items      []T    `json:"items"`
 	NextCursor string `json:"nextCursor,omitempty"`
@@ -181,6 +202,16 @@ type scriptGlyphDTO struct {
 	Components    []string            `json:"components,omitempty"`
 	SourceID      string              `json:"sourceId"`
 	License       string              `json:"license"`
+}
+
+type readingPassageDTO struct {
+	ID               string  `json:"id"`
+	Text             string  `json:"text"`
+	Level            string  `json:"level"`
+	LevelApproximate bool    `json:"levelApproximate"`
+	Coverage         float64 `json:"coverage"`
+	SourceID         string  `json:"sourceId"`
+	License          string  `json:"license"`
 }
 
 var badRequestErrors = []error{
