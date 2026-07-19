@@ -186,6 +186,12 @@ func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang re
 	}
 
 	if request.topic != "" {
+		if ids, err := s.semantic.SimilarVocabIDs(ctx, lang, level, request.topic, freeTopicVocabPool); err == nil && len(ids) > 0 {
+			ids = selectUncoveredFirst(ids, func(id string) string { return id }, covered, matchedTopicVocabPool)
+			entries, err := s.reader.VocabByIDs(ctx, lang, ids)
+			return entries, true, err
+		}
+
 		topics, err := s.reader.Topics(ctx, outbound.TopicFilter{Language: lang, Level: level})
 		if err != nil {
 			return nil, false, err

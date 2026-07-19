@@ -95,6 +95,17 @@ type fakeReader struct {
 	err     error
 }
 
+type fakeSemantic struct {
+	ids   []string
+	err   error
+	topic string
+}
+
+func (f *fakeSemantic) SimilarVocabIDs(_ context.Context, _ reference.Language, _ reference.Level, topic string, _ int) ([]string, error) {
+	f.topic = topic
+	return f.ids, f.err
+}
+
 type fakeCoverage struct {
 	vocab   []string
 	grammar []string
@@ -176,7 +187,12 @@ func newService(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fa
 
 func newServiceWithCoverage(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader, coverage *fakeCoverage) *lessons.Service {
 	t.Helper()
-	svc, err := lessons.NewService(store, checker, reader, coverage, store, &fakeProgressRecorder{})
+	return newServiceWithSemantic(t, store, checker, reader, coverage, &fakeSemantic{})
+}
+
+func newServiceWithSemantic(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader, coverage *fakeCoverage, semantic *fakeSemantic) *lessons.Service {
+	t.Helper()
+	svc, err := lessons.NewService(store, checker, reader, coverage, semantic, store, &fakeProgressRecorder{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -355,7 +371,7 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 
 	store := &fakeStore{record: outbound.LessonRecord{Lesson: validLesson()}}
 	progressRecorder := &fakeProgressRecorder{}
-	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, store, progressRecorder)
+	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, store, progressRecorder)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}

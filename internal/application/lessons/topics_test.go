@@ -342,3 +342,76 @@ func TestBuildWithoutTopicKeepsStrictSlice(t *testing.T) {
 		t.Errorf("topic-less prompt exceeded the strict %d-word slice", 20)
 	}
 }
+
+func TestBuildFreeTextTopicPrefersSemanticMatches(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeReader{
+		topics: []reference.Topic{
+			{Slug: "travel-transport", Level: "N5", Keywords: []string{"trip"}, VocabIDs: []string{"N5#99"}},
+		},
+		byID: map[string]reference.VocabEntry{
+			"N5#10": {ID: "N5#10", Headword: "駅", Gloss: []string{"station"}},
+			"N5#11": {ID: "N5#11", Headword: "電車", Gloss: []string{"train"}},
+			"N5#99": {ID: "N5#99", Headword: "地図", Gloss: []string{"map"}},
+		},
+	}
+	semantic := &fakeSemantic{ids: []string{"N5#11", "N5#10"}}
+	svc := newServiceWithSemantic(t, &fakeStore{}, &fakeChecker{}, reader, &fakeCoverage{}, semantic)
+
+	result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+		Owner:            "user-1",
+		Language:         "ja",
+		Level:            "N5",
+		Topic:            "a trip by train",
+		ExerciseTypes:    []string{"cloze"},
+		IncludeReference: true,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if semantic.topic != "a trip by train" {
+		t.Errorf("semantic search got topic %q", semantic.topic)
+	}
+	train := strings.Index(result.Prompt, "N5#11 | 電車")
+	station := strings.Index(result.Prompt, "N5#10 | 駅")
+	if train == -1 || station == -1 || train > station {
+		t.Errorf("semantic order not preserved: train@%d station@%d", train, station)
+	}
+	if strings.Contains(result.Prompt, "N5#99 | 地図") {
+		t.Errorf("keyword-matched word leaked in despite semantic results")
+	}
+	if !strings.Contains(result.Prompt, "candidate pool") {
+		t.Errorf("prompt missing candidate-pool instruction")
+	}
+}
+
+func TestBuildFallsBackToKeywordsWhenSemanticFails(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeReader{
+		topics: []reference.Topic{
+			{Slug: "travel-transport", Level: "N5", Keywords: []string{"trip"}, VocabIDs: []string{"N5#99"}},
+		},
+		byID: map[string]reference.VocabEntry{
+			"N5#99": {ID: "N5#99", Headword: "地図", Gloss: []string{"map"}},
+		},
+	}
+	semantic := &fakeSemantic{err: errors.New("bedrock unavailable")}
+	svc := newServiceWithSemantic(t, &fakeStore{}, &fakeChecker{}, reader, &fakeCoverage{}, semantic)
+
+	result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+		Owner:            "user-1",
+		Language:         "ja",
+		Level:            "N5",
+		Topic:            "a weekend trip",
+		ExerciseTypes:    []string{"cloze"},
+		IncludeReference: true,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !strings.Contains(result.Prompt, "N5#99 | 地図") {
+		t.Errorf("keyword fallback did not supply topic vocabulary:\n%s", result.Prompt)
+	}
+}

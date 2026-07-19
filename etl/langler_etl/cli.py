@@ -22,6 +22,11 @@ def main(argv=None) -> None:
     load_cmd.add_argument("--out", type=Path, default=ETL_ROOT / ".build")
     load_cmd.add_argument("--write-rate", type=float, default=20.0)
 
+    embed_cmd = sub.add_parser("embed", help="embed built vocab with Bedrock into a binary vector index")
+    embed_cmd.add_argument("--out", type=Path, default=ETL_ROOT / ".build")
+    embed_cmd.add_argument("--region", default="eu-central-1")
+    embed_cmd.add_argument("--model")
+
     args = parser.parse_args(argv)
     if args.command == "download":
         from . import download
@@ -37,3 +42,10 @@ def main(argv=None) -> None:
 
         written, uploaded = load.run(args.table, args.assets_bucket, args.out, args.write_rate)
         print(f"wrote {written} items, uploaded {uploaded} assets")
+    elif args.command == "embed":
+        from . import embeddings
+
+        path = embeddings.embed_corpus(
+            args.out, args.region, args.model or embeddings.MODEL_ID
+        )
+        print(f"wrote {path}")

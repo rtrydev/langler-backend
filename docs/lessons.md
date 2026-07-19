@@ -105,11 +105,19 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   (`TOPIC#<level>#<slug>` reference items, e.g. `food-drink`), the vocab slice
   is drawn from that topic's word list instead of the whole level; an unknown
   slug for the level is a `400` validation error. A free-text `topic` without
-  a slug is keyword-matched against the curated topics' `keywords` (up to the
-  two best matches feed the slice); matched or not, a free-text topic switches
-  the vocabulary to candidate-pool mode — a larger slice (30 matched / 40
-  level-wide) plus an instruction that the generating model should build the
-  lesson from the ~20 items that fit the topic and reference only those.
+  a slug is resolved semantically first: the topic text is embedded with
+  Bedrock (`EMBED_MODEL_ID`, cohere.embed-multilingual-v3 in prod — works for
+  Japanese and Polish input too) and matched by cosine similarity against the
+  precomputed vocabulary embedding index (`EMBEDDINGS_URL`, built by
+  `langler-etl embed` and served from the reference-assets CDN). If Bedrock or
+  the index is unavailable it falls back to keyword matching against the
+  curated topics' `keywords` (top two matches), then to the plain level slice.
+  Matched or not, a free-text topic switches the vocabulary to candidate-pool
+  mode — a larger slice (30 matched / 40 level-wide) plus an instruction that
+  the generating model should build the lesson from the ~20 items that fit the
+  topic and reference only those. This is the single sanctioned exception to
+  the no-server-side-model-calls rule: one short embedding call per free-text
+  prompt build, never a generative call.
 - `GET /lessons/topics?lang&level` — the curated topic list for a level with
   per-user coverage: `{"topics": [{"slug", "name", "description", "wordCount",
   "coveredCount"}]}`, sorted least-covered first. `coveredCount` counts the

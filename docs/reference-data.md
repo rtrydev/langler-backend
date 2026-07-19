@@ -111,6 +111,14 @@ KanjiVG SVGs are uploaded unmodified to the reference-assets S3 bucket under
 `kanjivg/<5-digit-lowercase-hex-codepoint>.svg` and served through CloudFront.
 `strokeDataRef` stores that key; clients resolve it against the assets CDN domain.
 
+`langler-etl embed` builds a vocabulary embedding index (`embeddings/ja-vocab.embed`,
+~8 MB) by embedding every built vocab record (headword + reading + glosses) with
+Bedrock cohere.embed-multilingual-v3 and quantizing the unit vectors to int8.
+Binary layout: 4-byte big-endian header length, JSON header
+(`{version, model, dims, count, ids}`), then `count × dims` int8 bytes.
+`langler-etl load --assets-bucket` uploads it next to the SVGs; the API Lambda
+fetches it once per container over the CDN for semantic topic matching.
+
 ## API surface (Go)
 
 - `GET /reference/vocab?lang&level&topic&limit&cursor`

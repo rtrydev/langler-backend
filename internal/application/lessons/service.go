@@ -23,12 +23,13 @@ type Service struct {
 	checker    outbound.ReferenceChecker
 	reader     outbound.ReferenceReader
 	coverage   outbound.CoverageReader
+	semantic   outbound.SemanticVocabSearch
 	results    outbound.ResultStore
 	progress   outbound.LessonProgressRecorder
 	now        func() time.Time
 }
 
-func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, coverage outbound.CoverageReader, results outbound.ResultStore, progress outbound.LessonProgressRecorder) (*Service, error) {
+func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, coverage outbound.CoverageReader, semantic outbound.SemanticVocabSearch, results outbound.ResultStore, progress outbound.LessonProgressRecorder) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("lesson store must not be nil")
 	}
@@ -41,6 +42,9 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if coverage == nil {
 		return nil, errors.New("coverage reader must not be nil")
 	}
+	if semantic == nil {
+		return nil, errors.New("semantic vocab search must not be nil")
+	}
 	if results == nil {
 		return nil, errors.New("result store must not be nil")
 	}
@@ -51,7 +55,7 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if !ok {
 		return nil, errors.New("lesson store must support idempotent imports")
 	}
-	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, coverage: coverage, results: results, progress: progress, now: time.Now}, nil
+	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, coverage: coverage, semantic: semantic, results: results, progress: progress, now: time.Now}, nil
 }
 
 func (s *Service) Import(ctx context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
@@ -15,6 +16,7 @@ import (
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/semanticref"
 	"github.com/rtrydev/langler-backend/internal/application/agenttokens"
 	"github.com/rtrydev/langler-backend/internal/application/assessments"
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
@@ -67,7 +69,11 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, lessonRepo, progressSvc)
+	semantic, err := semanticref.New(bedrockruntime.NewFromConfig(cfg), "ja", os.Getenv("EMBEDDINGS_URL"), os.Getenv("EMBED_MODEL_ID"))
+	if err != nil {
+		return nil, err
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, semantic, lessonRepo, progressSvc)
 	if err != nil {
 		return nil, err
 	}

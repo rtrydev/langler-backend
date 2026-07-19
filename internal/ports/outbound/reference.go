@@ -50,6 +50,10 @@ type TopicFilter struct {
 	Slug     reference.TopicTag
 }
 
+type SemanticVocabSearch interface {
+	SimilarVocabIDs(ctx context.Context, language reference.Language, level reference.Level, topic string, limit int) ([]string, error)
+}
+
 type ReferenceReader interface {
 	Vocab(ctx context.Context, filter VocabFilter) (VocabPage, error)
 	Grammar(ctx context.Context, filter GrammarFilter) (GrammarPage, error)

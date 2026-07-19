@@ -25,7 +25,14 @@ import (
 	progressapp "github.com/rtrydev/langler-backend/internal/application/progress"
 	appref "github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
+	reference "github.com/rtrydev/langler-backend/internal/domain/reference"
 )
+
+type unconfiguredSemantic struct{}
+
+func (unconfiguredSemantic) SimilarVocabIDs(context.Context, reference.Language, reference.Level, string, int) ([]string, error) {
+	return nil, fmt.Errorf("semantic search disabled in e2e")
+}
 
 func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	endpoint := os.Getenv("DYNAMODB_LOCAL_ENDPOINT")
@@ -63,7 +70,7 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("progress.NewService: %v", err)
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, lessonRepo, progressSvc)
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, unconfiguredSemantic{}, lessonRepo, progressSvc)
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
