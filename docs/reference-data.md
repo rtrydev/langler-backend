@@ -77,6 +77,7 @@ at build time).
 | `name` | S | Display name (`Food & drink`) |
 | `description` | S | One-line learner-facing description |
 | `level` | S | JLPT band |
+| `keywords` | L of S | Lowercase English keywords used to match free-text lesson topics to this topic |
 | `vocabIds` | L of S | Reference ids (`N5#1234567`) of the level's words tagged with this topic |
 
 ## Script glyph item

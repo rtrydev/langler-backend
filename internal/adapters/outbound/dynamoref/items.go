@@ -60,6 +60,7 @@ type topicItem struct {
 	Name        string   `dynamodbav:"name"`
 	Description string   `dynamodbav:"description"`
 	Level       string   `dynamodbav:"level"`
+	Keywords    []string `dynamodbav:"keywords"`
 	VocabIDs    []string `dynamodbav:"vocabIds"`
 }
 
@@ -69,6 +70,7 @@ func (t topicItem) toDomain() domain.Topic {
 		Name:        t.Name,
 		Description: t.Description,
 		Level:       domain.Level(t.Level),
+		Keywords:    t.Keywords,
 		VocabIDs:    t.VocabIDs,
 	}
 }

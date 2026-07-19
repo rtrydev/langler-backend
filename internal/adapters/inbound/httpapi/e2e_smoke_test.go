@@ -225,6 +225,9 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if !strings.Contains(promptText, "short_story") || !strings.Contains(promptText, "N5#") {
 		t.Fatalf("prompt missing story instructions or reference ids: %.400s", promptText)
 	}
+	if !strings.Contains(promptText, "candidate pool") {
+		t.Fatalf("free-text topic prompt missing candidate-pool instruction")
+	}
 
 	topicsReq := events.APIGatewayV2HTTPRequest{
 		RawPath:               "/lessons/topics",

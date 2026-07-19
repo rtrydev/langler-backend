@@ -46,6 +46,7 @@ def topic_records(vocab: list[dict], data: dict) -> list[dict]:
             "name": meta[slug]["name"],
             "description": meta[slug]["description"],
             "level": level,
+            "keywords": meta[slug]["keywords"],
             "vocabIds": ids,
             "sourceId": CURATED_TOPICS.id,
             "license": CURATED_TOPICS.license,

@@ -54,6 +54,7 @@ def test_topic_records_group_by_level_and_slug():
     assert school["name"] == "School & learning"
     assert school["level"] == "N5"
     assert school["lang"] == "ja"
+    assert school["keywords"] == ["school", "study"]
     assert school["sourceId"] and school["license"]
     assert by_sk["TOPIC#N4#school-learning"]["vocabIds"] == ["N4#1341350"]
 
@@ -66,6 +67,8 @@ def test_curated_topic_file_is_consistent():
     for topic in data["topics"]:
         assert slug_pattern.match(topic["slug"])
         assert topic["name"] and topic["description"]
+        assert topic["keywords"], topic["slug"]
+        assert all(keyword == keyword.lower() for keyword in topic["keywords"])
     assert data["assignments"]
     for word_id, assigned in data["assignments"].items():
         assert word_id.isdigit()

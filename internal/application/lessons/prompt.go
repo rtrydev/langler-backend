@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	domain "github.com/rtrydev/langler-backend/internal/domain/lesson"
@@ -16,6 +17,9 @@ import (
 
 const (
 	referenceVocabSlice   = 20
+	matchedTopicVocabPool = 30
+	freeTopicVocabPool    = 40
+	topicMatchLimit       = 2
 	referenceGrammarSlice = 8
 	maxPromptTopicLen     = 120
 	referencePageLimit    = 1000
@@ -41,14 +45,15 @@ func (s *Service) Build(ctx context.Context, query inbound.LessonPromptQuery) (i
 
 	var vocab []reference.VocabEntry
 	var grammar []reference.GrammarTopic
+	var pool bool
 	if request.includeReference {
-		vocab, grammar, err = s.referenceSlice(ctx, request)
+		vocab, grammar, pool, err = s.referenceSlice(ctx, request)
 		if err != nil {
 			return inbound.LessonPrompt{}, err
 		}
 	}
 
-	return inbound.LessonPrompt{Prompt: composePrompt(request, vocab, grammar)}, nil
+	return inbound.LessonPrompt{Prompt: composePrompt(request, vocab, grammar, pool)}, nil
 }
 
 type promptRequest struct {
@@ -143,40 +148,53 @@ func normalizePromptQuery(query inbound.LessonPromptQuery) (promptRequest, error
 	return request, nil
 }
 
-func (s *Service) referenceSlice(ctx context.Context, request promptRequest) ([]reference.VocabEntry, []reference.GrammarTopic, error) {
+func (s *Service) referenceSlice(ctx context.Context, request promptRequest) ([]reference.VocabEntry, []reference.GrammarTopic, bool, error) {
 	lang, err := reference.NewLanguage(string(request.language))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	level, err := reference.NewLevel(string(request.level))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
-	vocab, err := s.vocabSlice(ctx, request, lang, level)
+	vocab, pool, err := s.vocabSlice(ctx, request, lang, level)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	grammar, err := s.grammarSlice(ctx, request, lang, level)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	return vocab, grammar, nil
+	return vocab, grammar, pool, nil
 }
 
-func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang reference.Language, level reference.Level) ([]reference.VocabEntry, error) {
+func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang reference.Language, level reference.Level) ([]reference.VocabEntry, bool, error) {
 	covered, err := s.coveredIDs(ctx, request.owner, string(request.language), progress.KindVocab)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if request.topicSlug != "" {
 		topic, err := s.topicBySlug(ctx, lang, level, request.topicSlug)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		ids := selectUncoveredFirst(topic.VocabIDs, func(id string) string { return id }, covered, referenceVocabSlice)
-		return s.reader.VocabByIDs(ctx, lang, ids)
+		entries, err := s.reader.VocabByIDs(ctx, lang, ids)
+		return entries, false, err
+	}
+
+	if request.topic != "" {
+		topics, err := s.reader.Topics(ctx, outbound.TopicFilter{Language: lang, Level: level})
+		if err != nil {
+			return nil, false, err
+		}
+		if matched := matchTopics(request.topic, topics); len(matched) > 0 {
+			ids := selectUncoveredFirst(topicVocabIDs(matched), func(id string) string { return id }, covered, matchedTopicVocabPool)
+			entries, err := s.reader.VocabByIDs(ctx, lang, ids)
+			return entries, true, err
+		}
 	}
 
 	var entries []reference.VocabEntry
@@ -184,7 +202,7 @@ func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang re
 	for {
 		page, err := s.reader.Vocab(ctx, outbound.VocabFilter{Language: lang, Level: level, Limit: referencePageLimit, Cursor: cursor})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		entries = append(entries, page.Entries...)
 		if page.NextCursor == "" {
@@ -192,7 +210,75 @@ func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang re
 		}
 		cursor = page.NextCursor
 	}
-	return selectUncoveredFirst(entries, func(e reference.VocabEntry) string { return e.ID }, covered, referenceVocabSlice), nil
+	if request.topic != "" {
+		return selectUncoveredFirst(entries, func(e reference.VocabEntry) string { return e.ID }, covered, freeTopicVocabPool), true, nil
+	}
+	return selectUncoveredFirst(entries, func(e reference.VocabEntry) string { return e.ID }, covered, referenceVocabSlice), false, nil
+}
+
+func matchTopics(text string, topics []reference.Topic) []reference.Topic {
+	tokens := topicTokens(text)
+	if len(tokens) == 0 {
+		return nil
+	}
+	type scoredTopic struct {
+		topic reference.Topic
+		score int
+	}
+	var scored []scoredTopic
+	for _, topic := range topics {
+		keywords := make(map[string]bool, len(topic.Keywords))
+		for _, keyword := range topic.Keywords {
+			keywords[strings.ToLower(keyword)] = true
+		}
+		score := 0
+		for _, token := range tokens {
+			if keywords[token] || keywords[strings.TrimSuffix(token, "s")] {
+				score++
+			}
+		}
+		if score > 0 {
+			scored = append(scored, scoredTopic{topic: topic, score: score})
+		}
+	}
+	slices.SortStableFunc(scored, func(a, b scoredTopic) int {
+		if a.score != b.score {
+			return b.score - a.score
+		}
+		return strings.Compare(string(a.topic.Slug), string(b.topic.Slug))
+	})
+	matched := make([]reference.Topic, 0, topicMatchLimit)
+	for _, entry := range scored[:min(len(scored), topicMatchLimit)] {
+		matched = append(matched, entry.topic)
+	}
+	return matched
+}
+
+func topicTokens(text string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	tokens := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if utf8.RuneCountInString(field) >= 3 {
+			tokens = append(tokens, field)
+		}
+	}
+	return tokens
+}
+
+func topicVocabIDs(topics []reference.Topic) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, topic := range topics {
+		for _, id := range topic.VocabIDs {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
 }
 
 func (s *Service) grammarSlice(ctx context.Context, request promptRequest, lang reference.Language, level reference.Level) ([]reference.GrammarTopic, error) {
@@ -269,7 +355,7 @@ func selectUncoveredFirst[T any](items []T, id func(T) string, covered map[strin
 	return selected
 }
 
-func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar []reference.GrammarTopic) string {
+func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar []reference.GrammarTopic, pool bool) string {
 	var b strings.Builder
 	levelLabel := string(request.level)
 	if request.language == "ja" {
@@ -318,6 +404,9 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	if len(vocab) > 0 || len(grammar) > 0 {
 		fmt.Fprintf(&b, "## Reference data\n")
 		fmt.Fprintf(&b, "Ground the lesson in these vetted items. When an exercise uses one, put its id in that exercise's referencedVocab or referencedGrammar array. Use only ids listed here; never invent ids.\n")
+		if pool {
+			fmt.Fprintf(&b, "The vocabulary list is a candidate pool, larger than the lesson needs: pick roughly %d items that genuinely fit the topic, build the lesson on those, and leave the rest out. Reference only the items you actually use; never force an unrelated word in just because it is listed.\n", referenceVocabSlice)
+		}
 		if len(vocab) > 0 {
 			fmt.Fprintf(&b, "Vocabulary (id | headword | reading | gloss):\n")
 			for _, entry := range vocab {

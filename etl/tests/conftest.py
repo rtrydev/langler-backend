@@ -6,10 +6,10 @@ FIXTURE_DATA = Path(__file__).parent / "fixtures" / "data"
 
 FIXTURE_TOPICS = {
     "topics": [
-        {"slug": "school-learning", "name": "School & learning", "description": "Study and school life"},
-        {"slug": "nature-weather", "name": "Nature & weather", "description": "Animals, plants, and weather"},
-        {"slug": "language-communication", "name": "Language & communication", "description": "Speaking and writing"},
-        {"slug": "abstract-concepts", "name": "Abstract concepts", "description": "Ideas and ways of thinking"},
+        {"slug": "school-learning", "name": "School & learning", "description": "Study and school life", "keywords": ["school", "study"]},
+        {"slug": "nature-weather", "name": "Nature & weather", "description": "Animals, plants, and weather", "keywords": ["nature", "dog"]},
+        {"slug": "language-communication", "name": "Language & communication", "description": "Speaking and writing", "keywords": ["speak", "write"]},
+        {"slug": "abstract-concepts", "name": "Abstract concepts", "description": "Ideas and ways of thinking", "keywords": ["idea"]},
     ],
     "assignments": {
         "1206900": ["school-learning"],

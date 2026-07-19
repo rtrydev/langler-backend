@@ -86,6 +86,7 @@ type Topic struct {
 	Name        string
 	Description string
 	Level       Level
+	Keywords    []string
 	VocabIDs    []string
 }
 
