@@ -1,0 +1,12 @@
+{
+  "topics": [
+    {"slug":"everyday-life","name":"Everyday life","description":"Common actions, objects, and routines.","keywords":["day","daily","home","work","do","make","thing","time"]},
+    {"slug":"people-family","name":"People & family","description":"People, relationships, and family life.","keywords":["person","people","family","mother","father","child","friend","name"]},
+    {"slug":"food-drink","name":"Food & drink","description":"Meals, ingredients, and eating out.","keywords":["food","eat","drink","rice","water","tea","restaurant","cook"]},
+    {"slug":"places-travel","name":"Places & travel","description":"Places, directions, transport, and journeys.","keywords":["place","go","come","road","city","country","travel","bus","train"]},
+    {"slug":"learning-language","name":"Learning & language","description":"School, study, reading, and communication.","keywords":["school","learn","study","book","read","write","speak","language"]},
+    {"slug":"nature-weather","name":"Nature & weather","description":"Weather, animals, plants, and landscapes.","keywords":["weather","rain","sun","river","tree","animal","mountain","sea"]},
+    {"slug":"health-body","name":"Health & body","description":"The body, health, illness, and care.","keywords":["body","health","doctor","pain","sick","hand","head","medicine"]},
+    {"slug":"society-culture","name":"Society & culture","description":"Community, customs, media, and public life.","keywords":["society","culture","festival","government","news","music","religion","community"]}
+  ]
+}

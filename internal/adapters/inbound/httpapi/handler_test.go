@@ -25,14 +25,16 @@ func (f fakeStatusProvider) Status(context.Context) (inbound.Status, error) {
 }
 
 type fakeReferenceProvider struct {
-	vocab   inbound.VocabResult
-	grammar inbound.GrammarResult
-	scripts inbound.ScriptResult
-	err     error
+	vocab    inbound.VocabResult
+	grammar  inbound.GrammarResult
+	scripts  inbound.ScriptResult
+	readings inbound.ReadingResult
+	err      error
 
 	vocabQuery   inbound.VocabQuery
 	grammarQuery inbound.GrammarQuery
 	scriptQuery  inbound.ScriptQuery
+	readingQuery inbound.ReadingQuery
 }
 
 func (f *fakeReferenceProvider) Vocab(_ context.Context, query inbound.VocabQuery) (inbound.VocabResult, error) {
@@ -48,6 +50,11 @@ func (f *fakeReferenceProvider) Grammar(_ context.Context, query inbound.Grammar
 func (f *fakeReferenceProvider) Scripts(_ context.Context, query inbound.ScriptQuery) (inbound.ScriptResult, error) {
 	f.scriptQuery = query
 	return f.scripts, f.err
+}
+
+func (f *fakeReferenceProvider) Readings(_ context.Context, query inbound.ReadingQuery) (inbound.ReadingResult, error) {
+	f.readingQuery = query
+	return f.readings, f.err
 }
 
 type fakeLessonImporter struct {

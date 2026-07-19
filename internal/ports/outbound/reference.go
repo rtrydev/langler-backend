@@ -44,6 +44,22 @@ type ScriptPage struct {
 	NextCursor string
 }
 
+type ReadingFilter struct {
+	Language reference.Language
+	Level    reference.Level
+	Limit    int
+	Cursor   string
+}
+
+type ReadingPage struct {
+	Passages   []reference.ReadingPassage
+	NextCursor string
+}
+
+type ReadingReader interface {
+	Readings(ctx context.Context, filter ReadingFilter) (ReadingPage, error)
+}
+
 type TopicFilter struct {
 	Language reference.Language
 	Level    reference.Level

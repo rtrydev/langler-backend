@@ -92,13 +92,9 @@ def _manifest(vocab, grammar_items, kana_items, kanji, topic_items, data_dir: Pa
     resolved = json.loads(resolved_path.read_text()) if resolved_path.exists() else {}
     sources = []
     for source in REGISTRY:
-        if source.id.endswith("-pl") or source.id.startswith("nkjp-") or source.id in {
-            "kaikki-pl",
-            "certyfikat-polish",
-            "langler-curated-pl-grammar",
-            "langler-curated-pl-orthography",
-            "langler-curated-pl-topics",
-            "morfeusz-sgjp",
+        if source.id not in {
+            "jmdict-simplified", "kanjidic2", "kanjivg", "kradfile", "tatoeba",
+            "tanos-jlpt", "wordfreq", "langler-curated",
         }:
             continue
         entry = {

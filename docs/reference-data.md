@@ -17,6 +17,8 @@ partition. Keys are language-agnostic: Japanese uses `ja`; Polish (`pl`) and Bur
 | Script glyph (kana) | `REF#<lang>` | `SCRIPT#KANA#<seq>` |
 | Script glyph (kanji) | `REF#<lang>` | `SCRIPT#KANJI#<level>#<glyph>` |
 | Polish orthography note | `REF#pl` | `SCRIPT#ORTHOGRAPHY#<seq>` |
+| Burmese script glyph | `REF#my` | `SCRIPT#BURMESE#<seq>` |
+| Reading passage | `REF#<lang>` | `READING#<level>#<id>` |
 
 - `<level>` is an uppercase band label (`N5`…`N1` for Japanese; CEFR bands like `A1`
   for other languages later).
@@ -51,7 +53,7 @@ and declare the rest in an `attribution` map: `attribution.<part> = {sourceId, l
 | `gloss` | L of S | English glosses, first sense first, at most 5 |
 | `pos` | L of S | jmdict-simplified part-of-speech tags (`n`, `v5u`, …) |
 | `level` | S | JLPT band from the community list (`N5`…`N1`) or approximate Polish CEFR band (`A1`…`C2`) |
-| `levelApproximate` | BOOL | Polish vocabulary only: always true because CEFR is inferred from frequency rather than an official word list |
+| `levelApproximate` | BOOL | Polish and Burmese vocabulary: always true because CEFR is inferred from corpus frequency rather than an official word list |
 | `freqBand` | N | Optional. 1 (most frequent) … 8, derived from wordfreq zipf: `band = clamp(round(8 - zipf), 1, 8)` |
 | `topics` | L of S | 1–3 curated topic slugs from `topics_ja.json` (`food-drink`, …); also drives the `topic` query filter |
 | `example` | M | Optional: `{text S, translation S, sourceId S, license S}` (Tatoeba/Tanaka pair) |
@@ -76,7 +78,7 @@ data, and `attribution.evidence` for NKJP. When a
 matching sentence is found in the locally supplied NKJP 1M corpus, an
 `evidence` map preserves its text, source id, and license for review; the API
 continues to serve the hand-reviewed learner example. Each topic is stored at its
-first-introduced level. A Polish grammar query for a CEFR level returns that level
+first-introduced level. Polish and Burmese grammar queries for a CEFR level return that level
 and all lower levels in descending, target-first order; Japanese grammar queries
 remain exact-level queries.
 
@@ -104,6 +106,17 @@ Polish orthography notes use `scriptType = orthography`, a display pattern in
 `glyph`, the note title in `name`, and the explanation plus examples in
 `meanings`. They are returned by `GET /reference/scripts?lang=pl&type=orthography`.
 
+Burmese script records use `scriptType = burmese` and
+`readings.romanization`, exported from the myanmar-ime-aligned Hybrid Burmese
+tables. They are returned by `GET /reference/scripts?lang=my&type=burmese`.
+
+## Reading passage item
+
+`text`, `level`, `levelApproximate`, and `coverage` describe a Unicode-normalized
+passage selected from an explicitly licensed corpus. Burmese levels are approximate:
+the 90th-percentile segmented token rank and at least 80% C4-lexicon coverage determine
+the band. `GET /reference/readings?lang=my&level=A2` retrieves one difficulty band.
+
 Kana (`scriptType = kana`):
 
 | Attribute | Type | Notes |
@@ -130,6 +143,9 @@ Kanji (`scriptType = kanji`):
 KanjiVG SVGs are uploaded unmodified to the reference-assets S3 bucket under
 `kanjivg/<5-digit-lowercase-hex-codepoint>.svg` and served through CloudFront.
 `strokeDataRef` stores that key; clients resolve it against the assets CDN domain.
+The pruned GPL-3.0 myWord client model is uploaded as
+`burmese/myword-ngram.json`; the unpruned tens-of-megabytes source model remains an
+offline ETL input.
 
 `langler-etl embed` builds a vocabulary embedding index (`embeddings/ja-vocab.embed`,
 ~8 MB) by embedding every built vocab record (headword + reading + glosses) with
@@ -145,6 +161,7 @@ semantic topic matching.
 - `GET /reference/vocab?lang&level&topic&limit&cursor`
 - `GET /reference/grammar?lang&level&limit&cursor`
 - `GET /reference/scripts?lang&type&level&limit&cursor`
+- `GET /reference/readings?lang&level&limit&cursor`
 
 `lang` is required. `level`, `topic` (vocab), and `type` (scripts: `kana`/`kanji`)
 are optional filters. Responses are `{"items": [...], "nextCursor": "..."}`;

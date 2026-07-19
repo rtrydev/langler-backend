@@ -91,6 +91,30 @@ _ALL = [
         license="BSD-2-Clause",
         attribution="Morfeusz 2 morphological analyser with SGJP inflectional data, Institute of Computer Science PAS",
     ),
+    Source(
+        id="kaikki-my",
+        url="https://kaikki.org/dictionary/Burmese/kaikki.org-dictionary-Burmese.jsonl.gz",
+        license="CC BY-SA 4.0 and GFDL",
+        attribution="Kaikki.org Burmese dictionary; Wiktionary contributors; Wiktextract by Tatu Ylonen",
+    ),
+    Source(
+        id="myg2p-headwords",
+        url="https://github.com/ye-kyaw-thu/myG2P",
+        license="CC BY-NC-SA 4.0",
+        attribution="myG2P Burmese pronunciation lexicon by Ye Kyaw Thu",
+    ),
+    Source(
+        id="myanmar-c4-frequency",
+        url="https://huggingface.co/datasets/chuuhtetnaing/myanmar-c4-dataset",
+        license="ODC-BY 1.0",
+        attribution="Myanmar-C4 frequency counts prepared by the myanmar-ime corpus builder",
+    ),
+    Source(
+        id="myword-ngram",
+        url="https://github.com/ye-kyaw-thu/myWord",
+        license="GPL-3.0",
+        attribution="myWord Burmese word-segmentation statistics by Ye Kyaw Thu",
+    ),
 ]
 
 SOURCES = {source.id: source for source in _ALL}
@@ -137,6 +161,27 @@ CURATED_POLISH_TOPICS = Source(
     attribution="Langler project, original Polish vocabulary topic taxonomy",
 )
 
+CURATED_BURMESE_GRAMMAR = Source(
+    id="langler-curated-my-grammar",
+    url="langler-backend/etl/langler_etl/data/grammar_my.json",
+    license="CC BY-SA 4.0",
+    attribution="Langler project, hand-reviewed Burmese grammar topic inventory and examples",
+)
+
+CURATED_BURMESE_SCRIPT = Source(
+    id="langler-curated-my-script",
+    url="langler-backend/etl/langler_etl/data/script_my.json",
+    license="CC0",
+    attribution="Langler project, Burmese script inventory derived from Unicode names and myanmar-ime romanization data",
+)
+
+CURATED_BURMESE_TOPICS = Source(
+    id="langler-curated-my-topics",
+    url="langler-backend/etl/langler_etl/data/topics_my.json",
+    license="CC0",
+    attribution="Langler project, original Burmese vocabulary topic taxonomy",
+)
+
 REGISTRY = _ALL + [
     CURATED_KANA,
     CURATED_GRAMMAR,
@@ -144,4 +189,7 @@ REGISTRY = _ALL + [
     CURATED_POLISH_GRAMMAR,
     CURATED_POLISH_ORTHOGRAPHY,
     CURATED_POLISH_TOPICS,
+    CURATED_BURMESE_GRAMMAR,
+    CURATED_BURMESE_SCRIPT,
+    CURATED_BURMESE_TOPICS,
 ]

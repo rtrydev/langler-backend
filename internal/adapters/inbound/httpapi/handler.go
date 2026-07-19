@@ -85,6 +85,8 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleGrammar(ctx, req.QueryStringParameters), nil
 	case method == http.MethodGet && path == "/reference/scripts":
 		return h.handleScripts(ctx, req.QueryStringParameters), nil
+	case method == http.MethodGet && path == "/reference/readings":
+		return h.handleReadings(ctx, req.QueryStringParameters), nil
 	case method == http.MethodPost && path == "/lessons/prompt":
 		return h.handleLessonPrompt(ctx, req), nil
 	case method == http.MethodGet && path == "/lessons/topics":

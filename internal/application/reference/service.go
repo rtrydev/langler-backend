@@ -15,14 +15,19 @@ const (
 )
 
 type Service struct {
-	reader outbound.ReferenceReader
+	reader   outbound.ReferenceReader
+	readings outbound.ReadingReader
 }
 
 func NewService(reader outbound.ReferenceReader) (*Service, error) {
 	if reader == nil {
 		return nil, errors.New("reference reader must not be nil")
 	}
-	return &Service{reader: reader}, nil
+	readings, ok := reader.(outbound.ReadingReader)
+	if !ok {
+		return nil, errors.New("reference reader must support readings")
+	}
+	return &Service{reader: reader, readings: readings}, nil
 }
 
 func (s *Service) Vocab(ctx context.Context, query inbound.VocabQuery) (inbound.VocabResult, error) {
@@ -102,6 +107,24 @@ func (s *Service) Scripts(ctx context.Context, query inbound.ScriptQuery) (inbou
 		return inbound.ScriptResult{}, err
 	}
 	return inbound.ScriptResult{Glyphs: page.Glyphs, NextCursor: page.NextCursor}, nil
+}
+
+func (s *Service) Readings(ctx context.Context, query inbound.ReadingQuery) (inbound.ReadingResult, error) {
+	lang, err := domain.NewLanguage(query.Language)
+	if err != nil {
+		return inbound.ReadingResult{}, err
+	}
+	level, err := optionalLevel(query.Level)
+	if err != nil {
+		return inbound.ReadingResult{}, err
+	}
+	page, err := s.readings.Readings(ctx, outbound.ReadingFilter{
+		Language: lang, Level: level, Limit: clampLimit(query.Limit), Cursor: query.Cursor,
+	})
+	if err != nil {
+		return inbound.ReadingResult{}, err
+	}
+	return inbound.ReadingResult{Passages: page.Passages, NextCursor: page.NextCursor}, nil
 }
 
 func optionalLevel(band string) (domain.Level, error) {

@@ -65,7 +65,7 @@ func (r *Repository) Vocab(ctx context.Context, filter outbound.VocabFilter) (ou
 }
 
 func (r *Repository) Grammar(ctx context.Context, filter outbound.GrammarFilter) (outbound.GrammarPage, error) {
-	if filter.Language == "pl" && filter.Level != "" {
+	if (filter.Language == "pl" || filter.Language == "my") && filter.Level != "" {
 		start := "GRAMMAR#A1#"
 		end := "GRAMMAR#" + string(filter.Level) + "#\uffff"
 		page, err := r.queryRange(ctx, filter.Language, start, end, filter.Limit, filter.Cursor)
@@ -200,6 +200,26 @@ func (r *Repository) Scripts(ctx context.Context, filter outbound.ScriptFilter) 
 		glyphs = append(glyphs, item.toDomain())
 	}
 	return outbound.ScriptPage{Glyphs: glyphs, NextCursor: page.nextCursor}, nil
+}
+
+func (r *Repository) Readings(ctx context.Context, filter outbound.ReadingFilter) (outbound.ReadingPage, error) {
+	prefix := "READING#"
+	if filter.Level != "" {
+		prefix += string(filter.Level) + "#"
+	}
+	page, err := r.query(ctx, filter.Language, prefix, filter.Limit, filter.Cursor, "", nil)
+	if err != nil {
+		return outbound.ReadingPage{}, err
+	}
+	var items []readingItem
+	if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
+		return outbound.ReadingPage{}, fmt.Errorf("%w: unmarshal reading items: %v", domain.ErrStorageFailure, err)
+	}
+	passages := make([]domain.ReadingPassage, 0, len(items))
+	for _, item := range items {
+		passages = append(passages, item.toDomain())
+	}
+	return outbound.ReadingPage{Passages: passages, NextCursor: page.nextCursor}, nil
 }
 
 type rawPage struct {

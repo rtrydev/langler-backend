@@ -15,9 +15,11 @@ type fakeReader struct {
 	vocabFilter   outbound.VocabFilter
 	grammarFilter outbound.GrammarFilter
 	scriptFilter  outbound.ScriptFilter
+	readingFilter outbound.ReadingFilter
 	vocabPage     outbound.VocabPage
 	grammarPage   outbound.GrammarPage
 	scriptPage    outbound.ScriptPage
+	readingPage   outbound.ReadingPage
 	err           error
 }
 
@@ -34,6 +36,11 @@ func (f *fakeReader) Grammar(_ context.Context, filter outbound.GrammarFilter) (
 func (f *fakeReader) Scripts(_ context.Context, filter outbound.ScriptFilter) (outbound.ScriptPage, error) {
 	f.scriptFilter = filter
 	return f.scriptPage, f.err
+}
+
+func (f *fakeReader) Readings(_ context.Context, filter outbound.ReadingFilter) (outbound.ReadingPage, error) {
+	f.readingFilter = filter
+	return f.readingPage, f.err
 }
 
 func (f *fakeReader) Topics(_ context.Context, _ outbound.TopicFilter) ([]domain.Topic, error) {
@@ -185,6 +192,31 @@ func TestScriptsValidatesAndDelegates(t *testing.T) {
 
 	if _, err := svc.Scripts(context.Background(), inbound.ScriptQuery{Language: "ja", ScriptType: "Kanji"}); !errors.Is(err, domain.ErrInvalidScriptType) {
 		t.Fatalf("Scripts invalid type error = %v, want %v", err, domain.ErrInvalidScriptType)
+	}
+}
+
+func TestReadingsValidatesAndDelegates(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeReader{readingPage: outbound.ReadingPage{
+		Passages:   []domain.ReadingPassage{{ID: "story-1", Level: "A2"}},
+		NextCursor: "next",
+	}}
+	svc, err := appref.NewService(reader)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	result, err := svc.Readings(context.Background(), inbound.ReadingQuery{Language: "my", Level: "a2", Limit: 25, Cursor: "current"})
+	if err != nil {
+		t.Fatalf("Readings: %v", err)
+	}
+	want := outbound.ReadingFilter{Language: "my", Level: "A2", Limit: 25, Cursor: "current"}
+	if reader.readingFilter != want {
+		t.Errorf("filter = %+v, want %+v", reader.readingFilter, want)
+	}
+	if len(result.Passages) != 1 || result.Passages[0].ID != "story-1" || result.NextCursor != "next" {
+		t.Errorf("result = %+v, want fake passage and cursor", result)
 	}
 }
 

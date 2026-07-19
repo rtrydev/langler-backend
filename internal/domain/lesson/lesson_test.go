@@ -413,6 +413,51 @@ func TestNewAcceptsPolishOrthographyPractice(t *testing.T) {
 	}
 }
 
+func TestNewAcceptsUnicodeBurmeseLesson(t *testing.T) {
+	t.Parallel()
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "7a5e1e28-4e1a-4e9b-90e5-8a1de7bf2fd0",
+		Language:      "my",
+		Level:         "A1",
+		Title:         "ကျောင်းသွားတဲ့နေ့",
+		ReadingStage:  lesson.StageConnected,
+		Exercises: []lesson.Exercise{{
+			ID: "story", Type: lesson.TypeReading, Points: 4,
+			Reading: &lesson.Reading{
+				Genre: lesson.GenreShortStory, Title: "ကျောင်းသွားတဲ့နေ့",
+				Passage:     "မနက်ဖြန် မေ ကျောင်းကို သွားမယ်။",
+				Annotations: []lesson.Annotation{{Surface: "ကျောင်း", Reading: "kyaung:", Gloss: "school"}},
+				Questions:   []lesson.Question{{Question: "မေ ဘယ်ကို သွားမလဲ။", Kind: lesson.KindMultipleChoice, Options: []string{"ကျောင်း", "အိမ်"}, Answer: "ကျောင်း"}},
+			},
+		}},
+	}
+	if _, err := lesson.New(candidate); err != nil {
+		t.Fatalf("New: %v", err)
+	}
+}
+
+func TestNewRejectsIllegalBurmeseOrthography(t *testing.T) {
+	t.Parallel()
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "7a5e1e28-4e1a-4e9b-90e5-8a1de7bf2fd0",
+		Language:      "my",
+		Level:         "A1",
+		Title:         "စာရေးလေ့ကျင့်ခန်း",
+		ReadingStage:  lesson.StageFoundational,
+		Exercises: []lesson.Exercise{{
+			ID: "write", Type: lesson.TypeTranslation, Points: 2,
+			Translation: &lesson.Translation{Source: "ေက်ာင္း", Reference: "school"},
+		}},
+	}
+	_, err := lesson.New(candidate)
+	paths := issuePaths(t, err)
+	if !slices.Contains(paths, "exercises[0].payload.source") {
+		t.Errorf("issues = %v", paths)
+	}
+}
+
 func TestNewRejectsInvalidPolishOrthographyAnswer(t *testing.T) {
 	t.Parallel()
 

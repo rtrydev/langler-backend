@@ -59,7 +59,9 @@ tolerated and ignored). Payload shapes by type:
    test it; `foundational` is the explicit opt-out while a learner cannot decode
    connected text.
 3. **Language hooks** (`domain/lesson` script hooks): Japanese content fields must
-   contain Japanese script; a slot exists for Burmese orthography checks later.
+   contain Japanese script. Burmese target-language fields must contain Myanmar
+   script and pass the myanmar-ime-derived medial, vowel, tone, tall-aa, asat,
+   kinzi, virama, join-control, and Zawgyi legality rules.
 4. **Sanitization**: control characters and HTML/markup are rejected everywhere;
    imported strings are data, never instructions.
 5. **Reference integrity** (`application/lessons`): every `referencedVocab` /

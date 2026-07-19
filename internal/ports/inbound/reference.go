@@ -44,8 +44,21 @@ type ScriptResult struct {
 	NextCursor string
 }
 
+type ReadingQuery struct {
+	Language string
+	Level    string
+	Limit    int
+	Cursor   string
+}
+
+type ReadingResult struct {
+	Passages   []reference.ReadingPassage
+	NextCursor string
+}
+
 type ReferenceProvider interface {
 	Vocab(ctx context.Context, query VocabQuery) (VocabResult, error)
 	Grammar(ctx context.Context, query GrammarQuery) (GrammarResult, error)
 	Scripts(ctx context.Context, query ScriptQuery) (ScriptResult, error)
+	Readings(ctx context.Context, query ReadingQuery) (ReadingResult, error)
 }
