@@ -4,8 +4,9 @@ from decimal import Decimal
 from pathlib import Path
 
 
-def iter_records(ref_dir: Path):
-    for path in sorted(ref_dir.glob("*.jsonl")):
+def iter_records(ref_dir: Path, kind: str = "all"):
+    paths = ref_dir.glob("*.jsonl") if kind == "all" else [ref_dir / f"{kind}.jsonl"]
+    for path in sorted(path for path in paths if path.is_file()):
         with path.open(encoding="utf-8") as f:
             for line in f:
                 if line.strip():
@@ -37,9 +38,14 @@ def sync_assets(s3, bucket: str, assets_dir: Path) -> int:
     return count
 
 
-def sync_embeddings(s3, bucket: str, embeddings_dir: Path) -> int:
+def sync_embeddings(s3, bucket: str, embeddings_dir: Path, language: str = "all") -> int:
     count = 0
-    for path in sorted(embeddings_dir.glob("*.embed")):
+    paths = (
+        embeddings_dir.glob("*.embed")
+        if language == "all"
+        else [embeddings_dir / f"{language}-vocab.embed"]
+    )
+    for path in sorted(path for path in paths if path.is_file()):
         s3.put_object(
             Bucket=bucket,
             Key=f"embeddings/{path.name}",
@@ -51,16 +57,33 @@ def sync_embeddings(s3, bucket: str, embeddings_dir: Path) -> int:
     return count
 
 
-def run(table_name: str, bucket: str | None, out_dir: Path, write_rate: float) -> tuple[int, int]:
+def run(
+    table_name: str,
+    bucket: str | None,
+    out_dir: Path,
+    write_rate: float,
+    language: str = "all",
+    kind: str = "all",
+) -> tuple[int, int]:
     import boto3
 
     table = boto3.resource("dynamodb").Table(table_name)
-    written = load_table(table, iter_records(out_dir / "reference" / "ja"), write_rate)
+    written = 0
+    reference_dir = out_dir / "reference"
+    ref_dirs = (
+        reference_dir.iterdir()
+        if language == "all"
+        else [reference_dir / language]
+    )
+    for ref_dir in sorted(ref_dirs):
+        if ref_dir.is_dir():
+            written += load_table(table, iter_records(ref_dir, kind), write_rate)
     uploaded = 0
-    if bucket:
+    if bucket and kind == "all":
         s3 = boto3.client("s3")
-        uploaded = sync_assets(s3, bucket, out_dir / "assets" / "kanjivg")
+        if language in {"ja", "all"}:
+            uploaded = sync_assets(s3, bucket, out_dir / "assets" / "kanjivg")
         embeddings_dir = out_dir / "embeddings"
         if embeddings_dir.is_dir():
-            uploaded += sync_embeddings(s3, bucket, embeddings_dir)
+            uploaded += sync_embeddings(s3, bucket, embeddings_dir, language)
     return written, uploaded

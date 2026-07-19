@@ -109,6 +109,41 @@ func TestNewResultGradesMultipleChoiceAutomatically(t *testing.T) {
 	}
 }
 
+func TestNewResultGradesPolishOrthographyAutomatically(t *testing.T) {
+	t.Parallel()
+
+	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+	source := lesson.Lesson{
+		ID: "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		Exercises: []lesson.Exercise{{
+			ID:     "ort-1",
+			Type:   lesson.TypeScriptPractice,
+			Points: 6,
+			ScriptPractice: &lesson.ScriptPractice{Items: []lesson.ScriptItem{
+				{Kind: lesson.ScriptKindChoice, Answer: "król", Options: []string{"król", "krul"}},
+				{Kind: lesson.ScriptKindDictation, Answer: "morze"},
+			}},
+		}},
+	}
+	result := lesson.Result{
+		AttemptID:   "11111111-1111-4111-8111-111111111111",
+		LessonID:    source.ID,
+		StartedAt:   started,
+		CompletedAt: started.Add(time.Minute),
+		Score:       3,
+		MaxScore:    6,
+		AutoScore:   3,
+		AutoMax:     6,
+		Exercises: []lesson.ExerciseResult{{
+			ExerciseID: "ort-1", Type: lesson.TypeScriptPractice, Grading: "auto",
+			Score: 3, MaxScore: 6, Correct: 1, Total: 2,
+		}},
+	}
+	if _, err := lesson.NewResult(result, source); err != nil {
+		t.Fatalf("NewResult: %v", err)
+	}
+}
+
 func validResult() (lesson.Lesson, lesson.Result) {
 	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	source := lesson.Lesson{

@@ -157,9 +157,12 @@ type scriptPracticePayload struct {
 }
 
 type scriptItemPayload struct {
-	Glyph   string `json:"glyph"`
-	Reading string `json:"reading,omitempty"`
-	Meaning string `json:"meaning,omitempty"`
+	Glyph   string   `json:"glyph,omitempty"`
+	Reading string   `json:"reading,omitempty"`
+	Meaning string   `json:"meaning,omitempty"`
+	Kind    string   `json:"kind,omitempty"`
+	Answer  string   `json:"answer,omitempty"`
+	Options []string `json:"options,omitempty"`
 }
 
 func ownerFrom(req events.APIGatewayV2HTTPRequest) string {
@@ -634,7 +637,10 @@ func toReadingDomain(payload *readingPayload) *lesson.Reading {
 func toScriptPracticeDomain(payload *scriptPracticePayload) *lesson.ScriptPractice {
 	items := make([]lesson.ScriptItem, 0, len(payload.Items))
 	for _, item := range payload.Items {
-		items = append(items, lesson.ScriptItem{Glyph: item.Glyph, Reading: item.Reading, Meaning: item.Meaning})
+		items = append(items, lesson.ScriptItem{
+			Glyph: item.Glyph, Reading: item.Reading, Meaning: item.Meaning,
+			Kind: item.Kind, Answer: item.Answer, Options: item.Options,
+		})
 	}
 	return &lesson.ScriptPractice{Items: items}
 }
@@ -822,7 +828,10 @@ func toExerciseDocument(exercise lesson.Exercise) exerciseDocument {
 	case exercise.ScriptPractice != nil:
 		items := make([]scriptItemPayload, 0, len(exercise.ScriptPractice.Items))
 		for _, item := range exercise.ScriptPractice.Items {
-			items = append(items, scriptItemPayload{Glyph: item.Glyph, Reading: item.Reading, Meaning: item.Meaning})
+			items = append(items, scriptItemPayload{
+				Glyph: item.Glyph, Reading: item.Reading, Meaning: item.Meaning,
+				Kind: item.Kind, Answer: item.Answer, Options: item.Options,
+			})
 		}
 		payload = scriptPracticePayload{Items: items}
 	}

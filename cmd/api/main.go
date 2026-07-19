@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -23,6 +25,8 @@ import (
 	progressapp "github.com/rtrydev/langler-backend/internal/application/progress"
 	"github.com/rtrydev/langler-backend/internal/application/reference"
 	"github.com/rtrydev/langler-backend/internal/application/status"
+	lessondomain "github.com/rtrydev/langler-backend/internal/domain/lesson"
+	referencedomain "github.com/rtrydev/langler-backend/internal/domain/reference"
 )
 
 func main() {
@@ -69,7 +73,11 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	semantic, err := semanticref.New(bedrockruntime.NewFromConfig(cfg), "ja", os.Getenv("EMBEDDINGS_URL"), os.Getenv("EMBED_MODEL_ID"))
+	indexURLs, err := embeddingIndexURLs(os.Getenv("EMBEDDINGS_URLS"), os.Getenv("EMBEDDINGS_URL"))
+	if err != nil {
+		return nil, err
+	}
+	semantic, err := semanticref.New(bedrockruntime.NewFromConfig(cfg), indexURLs, os.Getenv("EMBED_MODEL_ID"))
 	if err != nil {
 		return nil, err
 	}
@@ -95,4 +103,31 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	}
 
 	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, tokenSvc, assessmentSvc)
+}
+
+func embeddingIndexURLs(raw, legacyJapaneseURL string) (map[referencedomain.Language]string, error) {
+	if raw == "" {
+		urls := make(map[referencedomain.Language]string)
+		if legacyJapaneseURL != "" {
+			urls["ja"] = legacyJapaneseURL
+		}
+		return urls, nil
+	}
+
+	var configured map[string]string
+	if err := json.Unmarshal([]byte(raw), &configured); err != nil {
+		return nil, fmt.Errorf("parse EMBEDDINGS_URLS: %w", err)
+	}
+	urls := make(map[referencedomain.Language]string, len(configured))
+	for language, indexURL := range configured {
+		if !lessondomain.KnownLanguage(lessondomain.Language(language)) {
+			return nil, fmt.Errorf("parse EMBEDDINGS_URLS language %q: unsupported language", language)
+		}
+		lang, err := referencedomain.NewLanguage(language)
+		if err != nil {
+			return nil, fmt.Errorf("parse EMBEDDINGS_URLS language %q: %w", language, err)
+		}
+		urls[lang] = indexURL
+	}
+	return urls, nil
 }

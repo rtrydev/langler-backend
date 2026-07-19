@@ -5,10 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "langler-etl"
 version = "0.1.0"
-description = "Offline ETL for Langler Japanese reference data"
+description = "Offline multilingual reference-data ETL for Langler"
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.34",
+    "morfeusz2>=1.99.15",
     "wordfreq[cjk]>=3.1",
 ]
 

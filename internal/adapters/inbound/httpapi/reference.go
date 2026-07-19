@@ -32,17 +32,18 @@ func (h *Handler) handleVocab(ctx context.Context, params map[string]string) eve
 	items := make([]vocabEntryDTO, 0, len(result.Entries))
 	for _, entry := range result.Entries {
 		items = append(items, vocabEntryDTO{
-			ID:       entry.ID,
-			Headword: entry.Headword,
-			Reading:  entry.Reading,
-			Gloss:    entry.Gloss,
-			Pos:      entry.PartsOfSpeech,
-			Level:    string(entry.Level),
-			FreqBand: entry.FreqBand,
-			Topics:   entry.Topics,
-			Example:  toExampleDTO(entry.Example),
-			SourceID: entry.SourceID,
-			License:  entry.License,
+			ID:               entry.ID,
+			Headword:         entry.Headword,
+			Reading:          entry.Reading,
+			Gloss:            entry.Gloss,
+			Pos:              entry.PartsOfSpeech,
+			Level:            string(entry.Level),
+			LevelApproximate: entry.LevelApproximate,
+			FreqBand:         entry.FreqBand,
+			Topics:           entry.Topics,
+			Example:          toExampleDTO(entry.Example),
+			SourceID:         entry.SourceID,
+			License:          entry.License,
 		})
 	}
 	return respondJSON(http.StatusOK, pageResponse[vocabEntryDTO]{Items: items, NextCursor: result.NextCursor})
@@ -141,17 +142,18 @@ func toExampleDTO(example *domain.Example) *exampleDTO {
 }
 
 type vocabEntryDTO struct {
-	ID       string      `json:"id"`
-	Headword string      `json:"headword"`
-	Reading  string      `json:"reading"`
-	Gloss    []string    `json:"gloss"`
-	Pos      []string    `json:"pos"`
-	Level    string      `json:"level"`
-	FreqBand int         `json:"freqBand,omitempty"`
-	Topics   []string    `json:"topics,omitempty"`
-	Example  *exampleDTO `json:"example,omitempty"`
-	SourceID string      `json:"sourceId"`
-	License  string      `json:"license"`
+	ID               string      `json:"id"`
+	Headword         string      `json:"headword"`
+	Reading          string      `json:"reading"`
+	Gloss            []string    `json:"gloss"`
+	Pos              []string    `json:"pos"`
+	Level            string      `json:"level"`
+	LevelApproximate bool        `json:"levelApproximate,omitempty"`
+	FreqBand         int         `json:"freqBand,omitempty"`
+	Topics           []string    `json:"topics,omitempty"`
+	Example          *exampleDTO `json:"example,omitempty"`
+	SourceID         string      `json:"sourceId"`
+	License          string      `json:"license"`
 }
 
 type grammarTopicDTO struct {

@@ -2,6 +2,7 @@ package lesson_test
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -384,6 +385,58 @@ func TestNewAllowsFoundationalWithoutStory(t *testing.T) {
 	}
 	if _, err := lesson.New(candidate); err != nil {
 		t.Fatalf("New: %v", err)
+	}
+}
+
+func TestNewAcceptsPolishOrthographyPractice(t *testing.T) {
+	t.Parallel()
+
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		Language:      "pl",
+		Level:         "A2",
+		Title:         "Ó czy u?",
+		ReadingStage:  lesson.StageFoundational,
+		Exercises: []lesson.Exercise{{
+			ID:   "ort-1",
+			Type: lesson.TypeScriptPractice,
+			ScriptPractice: &lesson.ScriptPractice{Items: []lesson.ScriptItem{
+				{Kind: lesson.ScriptKindChoice, Glyph: "Wybierz poprawną pisownię.", Options: []string{"król", "krul"}, Answer: "król"},
+				{Kind: lesson.ScriptKindDictation, Glyph: "Nakrycie budynku", Meaning: "ch/h", Answer: "dach"},
+			}},
+		}},
+	}
+
+	if _, err := lesson.New(candidate); err != nil {
+		t.Fatalf("New: %v", err)
+	}
+}
+
+func TestNewRejectsInvalidPolishOrthographyAnswer(t *testing.T) {
+	t.Parallel()
+
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		Language:      "pl",
+		Level:         "A2",
+		Title:         "Rz czy ż?",
+		ReadingStage:  lesson.StageFoundational,
+		Exercises: []lesson.Exercise{{
+			ID:             "ort-1",
+			Type:           lesson.TypeScriptPractice,
+			ScriptPractice: &lesson.ScriptPractice{Items: []lesson.ScriptItem{{Kind: lesson.ScriptKindChoice, Options: []string{"morze", "może"}, Answer: "morse"}}},
+		}},
+	}
+
+	_, err := lesson.New(candidate)
+	if err == nil {
+		t.Fatal("New: error = nil")
+	}
+	paths := issuePaths(t, err)
+	if !slices.Contains(paths, "exercises[0].payload.items[0].answer") {
+		t.Fatalf("issue paths = %v", paths)
 	}
 }
 

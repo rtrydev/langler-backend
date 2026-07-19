@@ -16,6 +16,7 @@ partition. Keys are language-agnostic: Japanese uses `ja`; Polish (`pl`) and Bur
 | Grammar topic | `REF#<lang>` | `GRAMMAR#<level>#<topicId>` |
 | Script glyph (kana) | `REF#<lang>` | `SCRIPT#KANA#<seq>` |
 | Script glyph (kanji) | `REF#<lang>` | `SCRIPT#KANJI#<level>#<glyph>` |
+| Polish orthography note | `REF#pl` | `SCRIPT#ORTHOGRAPHY#<seq>` |
 
 - `<level>` is an uppercase band label (`N5`…`N1` for Japanese; CEFR bands like `A1`
   for other languages later).
@@ -49,7 +50,8 @@ and declare the rest in an `attribution` map: `attribution.<part> = {sourceId, l
 | `reading` | S | Kana reading |
 | `gloss` | L of S | English glosses, first sense first, at most 5 |
 | `pos` | L of S | jmdict-simplified part-of-speech tags (`n`, `v5u`, …) |
-| `level` | S | JLPT band from the community list (`N5`…`N1`) |
+| `level` | S | JLPT band from the community list (`N5`…`N1`) or approximate Polish CEFR band (`A1`…`C2`) |
+| `levelApproximate` | BOOL | Polish vocabulary only: always true because CEFR is inferred from frequency rather than an official word list |
 | `freqBand` | N | Optional. 1 (most frequent) … 8, derived from wordfreq zipf: `band = clamp(round(8 - zipf), 1, 8)` |
 | `topics` | L of S | 1–3 curated topic slugs from `topics_ja.json` (`food-drink`, …); also drives the `topic` query filter |
 | `example` | M | Optional: `{text S, translation S, sourceId S, license S}` (Tatoeba/Tanaka pair) |
@@ -62,7 +64,21 @@ and declare the rest in an `attribution` map: `attribution.<part> = {sourceId, l
 | `name` | S | Display name (`Topic particle は`) |
 | `level` | S | JLPT band |
 | `description` | S | 1–2 sentence original description |
-| `example` | M | `{text S, translation S}` — original example sentence |
+| `example` | M | `{text S, translation S, sourceId S, license S}` — original example sentence |
+| `category` | S | Polish only: `morphology`, `syntax`, `word-formation`, or `register` |
+| `introducedAt` | S | Polish only: first CEFR level at which the topic appears |
+| `descriptorRef` | S | Polish only: section in the official adult certification inventory |
+
+Polish grammar records use the state certification curriculum as their primary
+source and additionally carry `attribution.wording` for the hand-reviewed
+Langler description, `attribution.morphologyValidation` for Morfeusz with SGJP
+data, and `attribution.evidence` for NKJP. When a
+matching sentence is found in the locally supplied NKJP 1M corpus, an
+`evidence` map preserves its text, source id, and license for review; the API
+continues to serve the hand-reviewed learner example. Each topic is stored at its
+first-introduced level. A Polish grammar query for a CEFR level returns that level
+and all lower levels in descending, target-first order; Japanese grammar queries
+remain exact-level queries.
 
 ## Topic catalog item
 
@@ -83,6 +99,10 @@ at build time).
 ## Script glyph item
 
 Common: `glyph` (S), `scriptType` (S: `kana` or `kanji`), `readings` (M of L of S).
+
+Polish orthography notes use `scriptType = orthography`, a display pattern in
+`glyph`, the note title in `name`, and the explanation plus examples in
+`meanings`. They are returned by `GET /reference/scripts?lang=pl&type=orthography`.
 
 Kana (`scriptType = kana`):
 
@@ -117,7 +137,8 @@ Bedrock cohere.embed-multilingual-v3 and quantizing the unit vectors to int8.
 Binary layout: 4-byte big-endian header length, JSON header
 (`{version, model, dims, count, ids}`), then `count × dims` int8 bytes.
 `langler-etl load --assets-bucket` uploads it next to the SVGs; the API Lambda
-fetches it once per container over the CDN for semantic topic matching.
+fetches each configured language index once per container over the CDN for
+semantic topic matching.
 
 ## API surface (Go)
 

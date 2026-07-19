@@ -45,6 +45,15 @@ def test_iter_records_parses_numbers_as_decimal(tmp_path):
     assert records == [{"SK": "VOCAB#N5#1", "freqBand": 3, "score": Decimal("1.5")}]
 
 
+def test_iter_records_filters_by_kind(tmp_path):
+    ref = tmp_path / "reference" / "pl"
+    ref.mkdir(parents=True)
+    (ref / "vocab.jsonl").write_text('{"SK":"VOCAB#A1#1"}\n', encoding="utf-8")
+    (ref / "grammar.jsonl").write_text('{"SK":"GRAMMAR#A1#one"}\n', encoding="utf-8")
+
+    assert list(load.iter_records(ref, "grammar")) == [{"SK": "GRAMMAR#A1#one"}]
+
+
 def test_load_table_puts_every_record():
     table = FakeTable()
     records = [{"PK": "REF#ja", "SK": f"VOCAB#N5#{n}"} for n in range(5)]
@@ -66,3 +75,18 @@ def test_sync_assets_sets_content_type_and_cache_control(tmp_path):
         assert call["Bucket"] == "assets-bucket"
         assert call["ContentType"] == "image/svg+xml"
         assert call["CacheControl"] == "public, max-age=31536000, immutable"
+
+
+def test_sync_embeddings_filters_by_language(tmp_path):
+    embeddings = tmp_path / "embeddings"
+    embeddings.mkdir()
+    (embeddings / "ja-vocab.embed").write_bytes(b"ja")
+    (embeddings / "pl-vocab.embed").write_bytes(b"pl")
+    s3 = FakeS3()
+
+    uploaded = load.sync_embeddings(s3, "assets-bucket", embeddings, "pl")
+
+    assert uploaded == 1
+    assert s3.calls[0]["Key"] == "embeddings/pl-vocab.embed"
+    assert s3.calls[0]["Body"] == b"pl"
+    assert s3.calls[0]["CacheControl"] == "public, max-age=300, must-revalidate"
