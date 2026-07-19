@@ -2,6 +2,7 @@ package assessment
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,9 +43,9 @@ const (
 )
 
 const (
-	stageVocabItems   = 5
+	stageVocabItems   = 6
 	stageGrammarItems = 2
-	stageReadingItems = 1
+	stageReadingItems = 2
 	stageItems        = stageVocabItems + stageGrammarItems + stageReadingItems
 	minStageItems     = 4
 	OptionCount       = 4
@@ -108,7 +109,9 @@ func NewSession(id, language string, now time.Time) (Session, error) {
 type VocabCandidate struct {
 	ID                 string
 	Headword           string
+	Reading            string
 	Gloss              string
+	PartsOfSpeech      []string
 	Example            string
 	ExampleTranslation string
 }
@@ -120,9 +123,11 @@ type GrammarCandidate struct {
 }
 
 type choice struct {
-	id     string
-	prompt string
-	answer string
+	id      string
+	prompt  string
+	answer  string
+	reading string
+	pos     []string
 }
 
 func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate, intn func(int) int) (Stage, error) {
@@ -139,16 +144,19 @@ func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate,
 	vocabPool := make([]choice, 0, len(vocab))
 	for _, candidate := range vocab {
 		if candidate.Headword != "" && candidate.Gloss != "" {
-			vocabPool = append(vocabPool, choice{id: candidate.ID, prompt: candidate.Headword, answer: candidate.Gloss})
+			vocabPool = append(vocabPool, choice{
+				id: candidate.ID, prompt: candidate.Headword, answer: candidate.Gloss,
+				reading: candidate.Reading, pos: candidate.PartsOfSpeech,
+			})
 		}
 		if candidate.Example != "" && candidate.ExampleTranslation != "" {
 			readingPool = append(readingPool, choice{id: candidate.ID, prompt: candidate.Example, answer: candidate.ExampleTranslation})
 		}
 	}
 
-	items := buildChoiceItems(KindGrammar, grammarPool, stageGrammarItems, intn)
-	items = append(items, buildChoiceItems(KindReading, readingPool, stageReadingItems, intn)...)
-	items = append(items, buildChoiceItems(KindVocab, vocabPool, stageItems-len(items), intn)...)
+	items := buildChoiceItems(KindGrammar, grammarPool, stageGrammarItems, intn, sentenceTrapScore)
+	items = append(items, buildChoiceItems(KindReading, readingPool, stageReadingItems, intn, sentenceTrapScore)...)
+	items = append(items, buildChoiceItems(KindVocab, vocabPool, stageItems-len(items), intn, vocabTrapScore)...)
 	if len(items) < minStageItems {
 		return Stage{}, ErrInsufficientReference
 	}
@@ -156,7 +164,7 @@ func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate,
 	return Stage{Band: band, Items: items}, nil
 }
 
-func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) int) []Item {
+func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) int, trapScore func(correct, candidate choice) int) []Item {
 	if count <= 0 {
 		return nil
 	}
@@ -168,13 +176,13 @@ func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) in
 	items := make([]Item, 0, count)
 	for i := 0; i < len(distinct) && len(items) < count; i++ {
 		correct := distinct[i]
-		options := make([]string, 0, OptionCount)
-		for j := 1; len(options) < OptionCount-1 && j < len(distinct); j++ {
-			distractor := distinct[(i+j)%len(distinct)]
-			options = append(options, distractor.answer)
-		}
-		if len(options) < OptionCount-1 {
+		traps := rankedTraps(correct, distinct, i, trapScore)
+		if len(traps) < OptionCount-1 {
 			continue
+		}
+		options := make([]string, 0, OptionCount)
+		for _, trap := range traps[:OptionCount-1] {
+			options = append(options, trap.answer)
 		}
 		position := intn(len(options) + 1)
 		options = append(options[:position], append([]string{correct.answer}, options[position:]...)...)
@@ -187,6 +195,111 @@ func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) in
 		})
 	}
 	return items
+}
+
+func rankedTraps(correct choice, distinct []choice, correctIndex int, trapScore func(correct, candidate choice) int) []choice {
+	traps := make([]choice, 0, len(distinct)-1)
+	for i, candidate := range distinct {
+		if i != correctIndex {
+			traps = append(traps, candidate)
+		}
+	}
+	slices.SortStableFunc(traps, func(a, b choice) int {
+		return trapScore(correct, b) - trapScore(correct, a)
+	})
+	return traps
+}
+
+func vocabTrapScore(correct, candidate choice) int {
+	score := 4 * sharedRuneCount(hanRunes(correct.prompt), hanRunes(candidate.prompt))
+	if sharesAny(correct.pos, candidate.pos) {
+		score += 3
+	}
+	if strings.HasPrefix(correct.answer, "to ") == strings.HasPrefix(candidate.answer, "to ") {
+		score += 2
+	}
+	score += min(2, commonPrefixRunes(correct.reading, candidate.reading))
+	return score
+}
+
+func sentenceTrapScore(correct, candidate choice) int {
+	score := 2 * sharedWordCount(correct.answer, candidate.answer)
+	score += sharedRuneCount(hanRunes(correct.prompt), hanRunes(candidate.prompt))
+	return score
+}
+
+func hanRunes(value string) map[rune]bool {
+	runes := map[rune]bool{}
+	for _, r := range value {
+		if r >= 0x3400 && r <= 0x9FFF {
+			runes[r] = true
+		}
+	}
+	return runes
+}
+
+func sharedRuneCount(a, b map[rune]bool) int {
+	count := 0
+	for r := range a {
+		if b[r] {
+			count++
+		}
+	}
+	return count
+}
+
+var trapStopwords = map[string]bool{
+	"a": true, "an": true, "the": true, "to": true, "of": true, "in": true,
+	"on": true, "at": true, "is": true, "are": true, "was": true, "were": true,
+	"i": true, "he": true, "she": true, "it": true, "you": true, "we": true,
+	"they": true, "my": true, "his": true, "her": true, "and": true, "or": true,
+	"for": true, "with": true, "that": true, "this": true, "not": true,
+	"do": true, "did": true, "have": true, "has": true, "had": true,
+}
+
+func contentWords(value string) map[string]bool {
+	words := map[string]bool{}
+	for _, word := range strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}) {
+		if len(word) > 1 && !trapStopwords[word] {
+			words[word] = true
+		}
+	}
+	return words
+}
+
+func sharedWordCount(a, b string) int {
+	words := contentWords(a)
+	count := 0
+	for word := range contentWords(b) {
+		if words[word] {
+			count++
+		}
+	}
+	return count
+}
+
+func sharesAny(a, b []string) bool {
+	for _, value := range a {
+		if slices.Contains(b, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func commonPrefixRunes(a, b string) int {
+	if a == "" || b == "" {
+		return 0
+	}
+	left := []rune(a)
+	right := []rune(b)
+	count := 0
+	for count < len(left) && count < len(right) && left[count] == right[count] {
+		count++
+	}
+	return count
 }
 
 func dedupe(pool []choice) []choice {

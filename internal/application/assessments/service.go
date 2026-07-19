@@ -219,7 +219,12 @@ func (s *Service) vocabPool(ctx context.Context, lang reference.Language, level 
 			return nil, err
 		}
 		for _, entry := range page.Entries {
-			candidate := domain.VocabCandidate{ID: entry.ID, Headword: entry.Headword}
+			candidate := domain.VocabCandidate{
+				ID:            entry.ID,
+				Headword:      entry.Headword,
+				Reading:       entry.Reading,
+				PartsOfSpeech: entry.PartsOfSpeech,
+			}
 			if len(entry.Gloss) > 0 {
 				candidate.Gloss = entry.Gloss[0]
 			}

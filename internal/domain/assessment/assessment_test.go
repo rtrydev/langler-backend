@@ -20,9 +20,11 @@ func vocabPool(size int, withExamples bool) []assessment.VocabCandidate {
 	pool := make([]assessment.VocabCandidate, 0, size)
 	for i := range size {
 		candidate := assessment.VocabCandidate{
-			ID:       fmt.Sprintf("N5#%d", i),
-			Headword: fmt.Sprintf("word-%d", i),
-			Gloss:    fmt.Sprintf("gloss-%d", i),
+			ID:            fmt.Sprintf("N5#%d", i),
+			Headword:      fmt.Sprintf("word-%d", i),
+			Reading:       fmt.Sprintf("reading-%d", i),
+			Gloss:         fmt.Sprintf("gloss-%d", i),
+			PartsOfSpeech: []string{"n"},
 		}
 		if withExamples {
 			candidate.Example = fmt.Sprintf("sentence-%d", i)
@@ -75,8 +77,8 @@ func TestBuildStageComposesItemMix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
-	if len(stage.Items) != 8 {
-		t.Fatalf("items = %d, want 8", len(stage.Items))
+	if len(stage.Items) != 10 {
+		t.Fatalf("items = %d, want 10", len(stage.Items))
 	}
 	counts := map[assessment.ItemKind]int{}
 	for _, item := range stage.Items {
@@ -95,8 +97,86 @@ func TestBuildStageComposesItemMix(t *testing.T) {
 			seen[option] = true
 		}
 	}
-	if counts[assessment.KindVocab] != 5 || counts[assessment.KindGrammar] != 2 || counts[assessment.KindReading] != 1 {
+	if counts[assessment.KindVocab] != 6 || counts[assessment.KindGrammar] != 2 || counts[assessment.KindReading] != 2 {
 		t.Fatalf("kind counts = %v", counts)
+	}
+}
+
+func TestVocabDistractorsAreTrapsFromTheSameKanjiFamily(t *testing.T) {
+	t.Parallel()
+
+	families := map[string][]assessment.VocabCandidate{
+		"gaku": {
+			{ID: "N5#1", Headword: "学校", Reading: "がっこう", Gloss: "school", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#2", Headword: "学生", Reading: "がくせい", Gloss: "student", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#3", Headword: "大学", Reading: "だいがく", Gloss: "university", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#4", Headword: "学期", Reading: "がっき", Gloss: "school term", PartsOfSpeech: []string{"n"}},
+		},
+		"hana": {
+			{ID: "N5#5", Headword: "花見", Reading: "はなみ", Gloss: "blossom viewing", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#6", Headword: "花火", Reading: "はなび", Gloss: "fireworks", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#7", Headword: "花束", Reading: "はなたば", Gloss: "bouquet", PartsOfSpeech: []string{"n"}},
+			{ID: "N5#8", Headword: "花園", Reading: "はなぞの", Gloss: "flower garden", PartsOfSpeech: []string{"n"}},
+		},
+	}
+	familyByGloss := map[string]string{}
+	var pool []assessment.VocabCandidate
+	for family, members := range families {
+		for _, member := range members {
+			familyByGloss[member.Gloss] = family
+			pool = append(pool, member)
+		}
+	}
+
+	stage, err := assessment.BuildStage("N5", pool, nil, testRand())
+	if err != nil {
+		t.Fatalf("BuildStage: %v", err)
+	}
+	for _, item := range stage.Items {
+		correctFamily := familyByGloss[item.Options[item.CorrectIndex]]
+		for _, option := range item.Options {
+			if familyByGloss[option] != correctFamily {
+				t.Fatalf("prompt %q mixes families in options %v", item.Prompt, item.Options)
+			}
+		}
+	}
+}
+
+func TestSentenceDistractorsShareContentWithTheCorrectAnswer(t *testing.T) {
+	t.Parallel()
+
+	grammar := []assessment.GrammarCandidate{
+		{ID: "N5#g1", Example: "私は学校へ行きます", ExampleTranslation: "I go to school every morning"},
+		{ID: "N5#g2", Example: "学校で勉強します", ExampleTranslation: "I study at school with friends"},
+		{ID: "N5#g3", Example: "兄は大学へ行きました", ExampleTranslation: "My brother went to school yesterday"},
+		{ID: "N5#g4", Example: "学校の先生は優しいです", ExampleTranslation: "The school teachers are kind"},
+		{ID: "N5#g5", Example: "天気がいいです", ExampleTranslation: "The weather is nice today"},
+		{ID: "N5#g6", Example: "猫がかわいいです", ExampleTranslation: "The cat is very cute"},
+		{ID: "N5#g7", Example: "音楽を聞きます", ExampleTranslation: "Music plays on the radio"},
+		{ID: "N5#g8", Example: "映画を見ます", ExampleTranslation: "The film starts in the evening"},
+	}
+	schoolTranslations := map[string]bool{
+		"I go to school every morning": true, "I study at school with friends": true,
+		"My brother went to school yesterday": true, "The school teachers are kind": true,
+	}
+
+	stage, err := assessment.BuildStage("N5", vocabPool(20, false), grammar, testRand())
+	if err != nil {
+		t.Fatalf("BuildStage: %v", err)
+	}
+	for _, item := range stage.Items {
+		if item.Kind != assessment.KindGrammar {
+			continue
+		}
+		correctIsSchool := schoolTranslations[item.Options[item.CorrectIndex]]
+		if !correctIsSchool {
+			continue
+		}
+		for _, option := range item.Options {
+			if !schoolTranslations[option] {
+				t.Fatalf("prompt %q has unrelated distractor in %v", item.Prompt, item.Options)
+			}
+		}
 	}
 }
 
@@ -107,8 +187,8 @@ func TestBuildStageFallsBackToVocabWhenPoolsAreThin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
-	if len(stage.Items) != 8 {
-		t.Fatalf("items = %d, want 8", len(stage.Items))
+	if len(stage.Items) != 10 {
+		t.Fatalf("items = %d, want 10", len(stage.Items))
 	}
 	for _, item := range stage.Items {
 		if item.Kind != assessment.KindVocab {
@@ -158,23 +238,23 @@ func TestAnswerValidatesSubmission(t *testing.T) {
 	session := newStartedSession(t)
 	now := time.Date(2026, 7, 19, 10, 5, 0, 0, time.UTC)
 
-	if _, err := assessment.Answer(session, 1, answersFor(session.Stages[0], 8), now); !errors.Is(err, assessment.ErrInvalidAnswer) {
+	if _, err := assessment.Answer(session, 1, answersFor(session.Stages[0], 10), now); !errors.Is(err, assessment.ErrInvalidAnswer) {
 		t.Fatalf("wrong stage error = %v", err)
 	}
 	if _, err := assessment.Answer(session, 0, []int{0, 1}, now); !errors.Is(err, assessment.ErrInvalidAnswer) {
 		t.Fatalf("short answers error = %v", err)
 	}
-	bad := answersFor(session.Stages[0], 8)
+	bad := answersFor(session.Stages[0], 10)
 	bad[0] = 9
 	if _, err := assessment.Answer(session, 0, bad, now); !errors.Is(err, assessment.ErrInvalidAnswer) {
 		t.Fatalf("out of range error = %v", err)
 	}
 
-	answered, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 8), now)
+	answered, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 10), now)
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
-	if _, err := assessment.Answer(answered, 0, answersFor(answered.Stages[0], 8), now); !errors.Is(err, assessment.ErrInvalidAnswer) && !errors.Is(err, assessment.ErrAlreadyCompleted) {
+	if _, err := assessment.Answer(answered, 0, answersFor(answered.Stages[0], 10), now); !errors.Is(err, assessment.ErrInvalidAnswer) && !errors.Is(err, assessment.ErrAlreadyCompleted) {
 		t.Fatalf("double answer error = %v", err)
 	}
 }
@@ -185,7 +265,7 @@ func TestAnswerAdvancesOnPassAndStopsOnFail(t *testing.T) {
 	session := newStartedSession(t)
 	now := time.Date(2026, 7, 19, 10, 5, 0, 0, time.UTC)
 
-	passed, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 6), now)
+	passed, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 8), now)
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
@@ -196,7 +276,7 @@ func TestAnswerAdvancesOnPassAndStopsOnFail(t *testing.T) {
 		t.Fatalf("next band = %q %v", band, ok)
 	}
 
-	failed, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 5), now)
+	failed, err := assessment.Answer(session, 0, answersFor(session.Stages[0], 7), now)
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
@@ -238,9 +318,9 @@ func TestSeededAnswerPatternsYieldOrderedEstimates(t *testing.T) {
 	t.Parallel()
 
 	patterns := map[string]map[string]int{
-		"N5": {"N5": 8, "N4": 2, "N3": 0, "N2": 0, "N1": 0},
-		"N3": {"N5": 8, "N4": 7, "N3": 6, "N2": 3, "N1": 0},
-		"N1": {"N5": 8, "N4": 8, "N3": 8, "N2": 7, "N1": 7},
+		"N5": {"N5": 10, "N4": 3, "N3": 0, "N2": 0, "N1": 0},
+		"N3": {"N5": 10, "N4": 9, "N3": 8, "N2": 4, "N1": 0},
+		"N1": {"N5": 10, "N4": 10, "N3": 9, "N2": 8, "N1": 8},
 	}
 	for trueLevel, correctByBand := range patterns {
 		session := runToCompletion(t, correctByBand)
@@ -253,17 +333,17 @@ func TestSeededAnswerPatternsYieldOrderedEstimates(t *testing.T) {
 func TestConfidenceReflectsMargin(t *testing.T) {
 	t.Parallel()
 
-	decisive := runToCompletion(t, map[string]int{"N5": 8, "N4": 8, "N3": 2})
+	decisive := runToCompletion(t, map[string]int{"N5": 10, "N4": 10, "N3": 2})
 	if decisive.EstimatedLevel != "N4" || decisive.Confidence != assessment.ConfidenceHigh {
 		t.Fatalf("decisive = %s %s", decisive.EstimatedLevel, decisive.Confidence)
 	}
 
-	borderline := runToCompletion(t, map[string]int{"N5": 8, "N4": 6, "N3": 5})
+	borderline := runToCompletion(t, map[string]int{"N5": 10, "N4": 8, "N3": 7})
 	if borderline.EstimatedLevel != "N4" || borderline.Confidence != assessment.ConfidenceLow {
 		t.Fatalf("borderline = %s %s", borderline.EstimatedLevel, borderline.Confidence)
 	}
 
-	ceiling := runToCompletion(t, map[string]int{"N5": 8, "N4": 8, "N3": 8, "N2": 8, "N1": 8})
+	ceiling := runToCompletion(t, map[string]int{"N5": 10, "N4": 10, "N3": 10, "N2": 10, "N1": 10})
 	if ceiling.EstimatedLevel != "N1" || ceiling.Confidence != assessment.ConfidenceHigh || ceiling.Floor {
 		t.Fatalf("ceiling = %s %s floor=%v", ceiling.EstimatedLevel, ceiling.Confidence, ceiling.Floor)
 	}

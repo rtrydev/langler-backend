@@ -15,29 +15,39 @@ A placement test is a sequence of **stages**, one per band, in ascending
 difficulty (`N5 → N1`, `A1 → C2`). Bands come from the lesson level catalog
 (`lesson.LevelsFor`), so a new language is configuration, not new code.
 
-Each stage holds 8 auto-scorable multiple-choice items (4 options each) drawn
-from the band's reference partition:
+Each stage holds 10 auto-scorable multiple-choice items (4 options each)
+drawn from the band's reference partition:
 
 | Kind | Count | Prompt | Correct option | Distractors |
 |---|---|---|---|---|
-| `vocab` | 5 | Vocabulary headword | First gloss | First glosses of other band vocabulary |
-| `grammar` | 2 | Grammar example sentence | Example translation | Other band grammar example translations |
-| `reading` | 1 | Vocabulary example sentence | Example translation | Other band vocabulary example translations |
+| `vocab` | 6 | Vocabulary headword | First gloss | Trap-ranked glosses of other band vocabulary |
+| `grammar` | 2 | Grammar example sentence | Example translation | Trap-ranked band grammar example translations |
+| `reading` | 2 | Vocabulary example sentence | Example translation | Trap-ranked band vocabulary example translations |
+
+Distractors are **traps**, not random draws — each candidate distractor is
+scored for how plausible it stays under partial knowledge and the top three
+are used. Vocabulary distractors prefer words sharing Han characters with the
+headword (recognising one kanji must not identify the answer), a matching
+part of speech, a matching gloss shape (verb glosses against verb glosses),
+and a similar reading. Sentence distractors prefer translations sharing
+content words with the correct translation and sentences sharing Han
+characters with the prompt, so understanding a fragment of the sentence still
+leaves several consistent options. Ties fall back to random pool order.
 
 When a band lacks enough grammar topics or example sentences, the missing
 items fall back to `vocab` kind; a band without at least 4 usable vocabulary
-entries cannot be assembled and the start request fails. Items are sampled
-randomly per session, options are shuffled, and correct indexes never leave
-the backend while the assessment is in progress.
+entries cannot be assembled and the start request fails. Correct items are
+sampled randomly per session, options are shuffled, and correct indexes never
+leave the backend while the assessment is in progress.
 
 Stages are built lazily: starting an assessment builds only the first stage;
 each stage is appended when the previous one is passed. A learner who fails
-the first stage answers 8 items; reaching the top band of a five-band plan
-means 40. Sessions are untimed.
+the first stage answers 10 items; reaching the top band of a five-band plan
+means 50. Sessions are untimed.
 
 ## Progression and scoring
 
-- A stage **passes** at ≥ 75% correct (6 of 8).
+- A stage **passes** at ≥ 75% correct (8 of 10).
 - Passing the last band, or failing any stage, **completes** the assessment.
 - The estimate is the **highest passed band**; when no stage passes, the
   estimate is the lowest band and the result carries `floor: true` ("start at

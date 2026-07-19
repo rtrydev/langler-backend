@@ -88,9 +88,11 @@ func newFakeReader(levels []string) *fakeReader {
 	for _, level := range levels {
 		for i := range 20 {
 			reader.vocabByLevel[level] = append(reader.vocabByLevel[level], reference.VocabEntry{
-				ID:       fmt.Sprintf("%s#%d", level, i),
-				Headword: fmt.Sprintf("%s-word-%d", level, i),
-				Gloss:    []string{fmt.Sprintf("%s-gloss-%d", level, i)},
+				ID:            fmt.Sprintf("%s#%d", level, i),
+				Headword:      fmt.Sprintf("%s-word-%d", level, i),
+				Reading:       fmt.Sprintf("%s-reading-%d", level, i),
+				PartsOfSpeech: []string{"n"},
+				Gloss:         []string{fmt.Sprintf("%s-gloss-%d", level, i)},
 				Example: &reference.Example{
 					Text:        fmt.Sprintf("%s-sentence-%d", level, i),
 					Translation: fmt.Sprintf("%s-translation-%d", level, i),
@@ -202,7 +204,7 @@ func TestStartBuildsFirstStageWithoutLeakingAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if view.Stage == nil || view.Stage.Band != "N5" || view.Stage.BandCount != 5 || len(view.Stage.Items) != 8 {
+	if view.Stage == nil || view.Stage.Band != "N5" || view.Stage.BandCount != 5 || len(view.Stage.Items) != 10 {
 		t.Fatalf("stage = %+v", view.Stage)
 	}
 	if view.Status != string(domain.StatusInProgress) {
