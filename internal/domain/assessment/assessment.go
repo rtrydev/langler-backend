@@ -2,6 +2,7 @@ package assessment
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -130,8 +131,8 @@ type choice struct {
 	pos     []string
 }
 
-func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate, intn func(int) int) (Stage, error) {
-	if band == "" || intn == nil {
+func BuildStage(band string, difficulty float64, vocab []VocabCandidate, grammar []GrammarCandidate, intn func(int) int) (Stage, error) {
+	if band == "" || difficulty < 0 || difficulty > 1 || intn == nil {
 		return Stage{}, ErrInvalidAssessment
 	}
 	grammarPool := make([]choice, 0, len(grammar))
@@ -154,9 +155,10 @@ func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate,
 		}
 	}
 
-	items := buildChoiceItems(KindGrammar, grammarPool, stageGrammarItems, intn, sentenceTrapScore)
-	items = append(items, buildChoiceItems(KindReading, readingPool, stageReadingItems, intn, sentenceTrapScore)...)
-	items = append(items, buildChoiceItems(KindVocab, vocabPool, stageItems-len(items), intn, vocabTrapScore)...)
+	sentenceSlack := int(math.Round((1 - difficulty) * 2))
+	items := buildChoiceItems(KindGrammar, grammarPool, stageGrammarItems, sentenceSlack, intn, sentenceTrapScore)
+	items = append(items, buildChoiceItems(KindReading, readingPool, stageReadingItems, sentenceSlack, intn, sentenceTrapScore)...)
+	items = append(items, buildChoiceItems(KindVocab, vocabPool, stageItems-len(items), 0, intn, vocabTrapScore)...)
 	if len(items) < minStageItems {
 		return Stage{}, ErrInsufficientReference
 	}
@@ -164,7 +166,7 @@ func BuildStage(band string, vocab []VocabCandidate, grammar []GrammarCandidate,
 	return Stage{Band: band, Items: items}, nil
 }
 
-func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) int, trapScore func(correct, candidate choice) int) []Item {
+func buildChoiceItems(kind ItemKind, pool []choice, count, slack int, intn func(int) int, trapScore func(correct, candidate choice) int) []Item {
 	if count <= 0 {
 		return nil
 	}
@@ -180,8 +182,10 @@ func buildChoiceItems(kind ItemKind, pool []choice, count int, intn func(int) in
 		if len(traps) < OptionCount-1 {
 			continue
 		}
+		pick := traps[:min(len(traps), OptionCount-1+slack)]
+		shuffle(pick, intn)
 		options := make([]string, 0, OptionCount)
-		for _, trap := range traps[:OptionCount-1] {
+		for _, trap := range pick[:OptionCount-1] {
 			options = append(options, trap.answer)
 		}
 		position := intn(len(options) + 1)
@@ -225,6 +229,14 @@ func vocabTrapScore(correct, candidate choice) int {
 func sentenceTrapScore(correct, candidate choice) int {
 	score := 2 * sharedWordCount(correct.answer, candidate.answer)
 	score += sharedRuneCount(hanRunes(correct.prompt), hanRunes(candidate.prompt))
+	score += 2 * min(4, sharedStructureCount(correct.answer, candidate.answer))
+	score += min(6, commonSuffixRunes(sentenceBody(correct.prompt), sentenceBody(candidate.prompt)))
+	if hasNegation(correct.answer) != hasNegation(candidate.answer) {
+		score -= 4
+	}
+	if isQuestion(correct.answer) != isQuestion(candidate.answer) {
+		score -= 4
+	}
 	return score
 }
 
@@ -276,6 +288,66 @@ func sharedWordCount(a, b string) int {
 		if words[word] {
 			count++
 		}
+	}
+	return count
+}
+
+var structureWords = map[string]bool{
+	"will": true, "would": true, "shall": true, "can": true, "could": true,
+	"must": true, "should": true, "might": true, "may": true,
+	"do": true, "does": true, "did": true, "done": true,
+	"is": true, "are": true, "am": true, "was": true, "were": true,
+	"be": true, "been": true, "being": true,
+	"have": true, "has": true, "had": true,
+	"not": true, "no": true, "never": true,
+	"if": true, "because": true, "when": true, "while": true,
+	"before": true, "after": true, "until": true, "than": true,
+	"please": true, "want": true, "going": true, "used": true, "too": true,
+}
+
+func structureSignature(value string) map[string]bool {
+	normalized := strings.ReplaceAll(strings.ToLower(value), "n't", " not")
+	words := map[string]bool{}
+	for _, word := range strings.FieldsFunc(normalized, func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}) {
+		if structureWords[word] {
+			words[word] = true
+		}
+	}
+	return words
+}
+
+func sharedStructureCount(a, b string) int {
+	words := structureSignature(a)
+	count := 0
+	for word := range structureSignature(b) {
+		if words[word] {
+			count++
+		}
+	}
+	return count
+}
+
+func hasNegation(value string) bool {
+	signature := structureSignature(value)
+	return signature["not"] || signature["no"] || signature["never"]
+}
+
+func isQuestion(value string) bool {
+	return strings.Contains(value, "?")
+}
+
+func sentenceBody(value string) string {
+	return strings.TrimRight(value, "。．.!?！？…」』\" ")
+}
+
+func commonSuffixRunes(a, b string) int {
+	left := []rune(a)
+	right := []rune(b)
+	count := 0
+	for count < len(left) && count < len(right) && left[len(left)-1-count] == right[len(right)-1-count] {
+		count++
 	}
 	return count
 }

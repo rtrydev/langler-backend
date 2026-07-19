@@ -30,9 +30,17 @@ are used. Vocabulary distractors prefer words sharing Han characters with the
 headword (recognising one kanji must not identify the answer), a matching
 part of speech, a matching gloss shape (verb glosses against verb glosses),
 and a similar reading. Sentence distractors prefer translations sharing
-content words with the correct translation and sentences sharing Han
-characters with the prompt, so understanding a fragment of the sentence still
-leaves several consistent options. Ties fall back to random pool order.
+content words with the correct translation, sentences sharing Han characters
+with the prompt, a matching grammatical structure (shared tense, modal, and
+auxiliary signature in the translations plus shared sentence-final endings in
+the source sentences), and matching polarity and sentence type — a negated or
+interrogative correct answer gets negated or interrogative distractors, so
+recognising the grammatical skeleton does not identify the answer. Ties fall
+back to random pool order.
+
+Sentence traps also tighten with the band: the lowest band samples its three
+distractors from the top five candidates, while the top band takes the top
+three outright, so options grow more similar as the test progresses.
 
 When a band lacks enough grammar topics or example sentences, the missing
 items fall back to `vocab` kind; a band without at least 4 usable vocabulary

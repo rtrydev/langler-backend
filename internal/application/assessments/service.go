@@ -52,7 +52,7 @@ func (s *Service) Start(ctx context.Context, command inbound.AssessmentStartComm
 	if err != nil {
 		return inbound.AssessmentView{}, err
 	}
-	stage, err := s.buildStage(ctx, session.Language, session.Bands[0])
+	stage, err := s.buildStage(ctx, session.Language, session.Bands[0], bandDifficulty(session.Bands, session.Bands[0]))
 	if err != nil {
 		return inbound.AssessmentView{}, err
 	}
@@ -90,7 +90,7 @@ func (s *Service) Answer(ctx context.Context, command inbound.AssessmentAnswerCo
 			UpdatedAt:    updated.CompletedAt,
 		}
 	} else if band, ok := domain.NextBand(updated); ok {
-		stage, err := s.buildStage(ctx, updated.Language, band)
+		stage, err := s.buildStage(ctx, updated.Language, band, bandDifficulty(updated.Bands, band))
 		if err != nil {
 			return inbound.AssessmentView{}, err
 		}
@@ -190,7 +190,7 @@ func (s *Service) newID() (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
-func (s *Service) buildStage(ctx context.Context, language, band string) (domain.Stage, error) {
+func (s *Service) buildStage(ctx context.Context, language, band string, difficulty float64) (domain.Stage, error) {
 	lang, err := reference.NewLanguage(language)
 	if err != nil {
 		return domain.Stage{}, err
@@ -207,7 +207,15 @@ func (s *Service) buildStage(ctx context.Context, language, band string) (domain
 	if err != nil {
 		return domain.Stage{}, err
 	}
-	return domain.BuildStage(band, vocab, grammar, s.intn)
+	return domain.BuildStage(band, difficulty, vocab, grammar, s.intn)
+}
+
+func bandDifficulty(bands []string, band string) float64 {
+	index := slices.Index(bands, band)
+	if index <= 0 || len(bands) < 2 {
+		return 0
+	}
+	return float64(index) / float64(len(bands)-1)
 }
 
 func (s *Service) vocabPool(ctx context.Context, lang reference.Language, level reference.Level) ([]domain.VocabCandidate, error) {

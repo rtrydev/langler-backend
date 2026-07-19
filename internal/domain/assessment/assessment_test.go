@@ -73,7 +73,7 @@ func TestNewSessionValidatesInput(t *testing.T) {
 func TestBuildStageComposesItemMix(t *testing.T) {
 	t.Parallel()
 
-	stage, err := assessment.BuildStage("N5", vocabPool(20, true), grammarPool(6), testRand())
+	stage, err := assessment.BuildStage("N5", 0, vocabPool(20, true), grammarPool(6), testRand())
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestVocabDistractorsAreTrapsFromTheSameKanjiFamily(t *testing.T) {
 		}
 	}
 
-	stage, err := assessment.BuildStage("N5", pool, nil, testRand())
+	stage, err := assessment.BuildStage("N5", 1, pool, nil, testRand())
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
@@ -146,21 +146,21 @@ func TestSentenceDistractorsShareContentWithTheCorrectAnswer(t *testing.T) {
 	t.Parallel()
 
 	grammar := []assessment.GrammarCandidate{
-		{ID: "N5#g1", Example: "私は学校へ行きます", ExampleTranslation: "I go to school every morning"},
-		{ID: "N5#g2", Example: "学校で勉強します", ExampleTranslation: "I study at school with friends"},
-		{ID: "N5#g3", Example: "兄は大学へ行きました", ExampleTranslation: "My brother went to school yesterday"},
-		{ID: "N5#g4", Example: "学校の先生は優しいです", ExampleTranslation: "The school teachers are kind"},
-		{ID: "N5#g5", Example: "天気がいいです", ExampleTranslation: "The weather is nice today"},
-		{ID: "N5#g6", Example: "猫がかわいいです", ExampleTranslation: "The cat is very cute"},
-		{ID: "N5#g7", Example: "音楽を聞きます", ExampleTranslation: "Music plays on the radio"},
-		{ID: "N5#g8", Example: "映画を見ます", ExampleTranslation: "The film starts in the evening"},
+		{ID: "N5#g1", Example: "私は学校へ行きます", ExampleTranslation: "I go to school in the morning"},
+		{ID: "N5#g2", Example: "彼女は学校へ行きます", ExampleTranslation: "She goes to school in the afternoon"},
+		{ID: "N5#g3", Example: "友達と学校へ行きます", ExampleTranslation: "We go to school with friends"},
+		{ID: "N5#g4", Example: "電車で学校へ行きます", ExampleTranslation: "They go to school by train"},
+		{ID: "N5#g5", Example: "今日は天気がいいです", ExampleTranslation: "The weather is nice today"},
+		{ID: "N5#g6", Example: "今日は天気が悪いです", ExampleTranslation: "The weather is bad today"},
+		{ID: "N5#g7", Example: "明日は天気がいいです", ExampleTranslation: "The weather will be nice tomorrow"},
+		{ID: "N5#g8", Example: "天気がとてもいいです", ExampleTranslation: "The weather is very nice"},
 	}
 	schoolTranslations := map[string]bool{
-		"I go to school every morning": true, "I study at school with friends": true,
-		"My brother went to school yesterday": true, "The school teachers are kind": true,
+		"I go to school in the morning": true, "She goes to school in the afternoon": true,
+		"We go to school with friends": true, "They go to school by train": true,
 	}
 
-	stage, err := assessment.BuildStage("N5", vocabPool(20, false), grammar, testRand())
+	stage, err := assessment.BuildStage("N5", 1, vocabPool(20, false), grammar, testRand())
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
@@ -169,12 +169,44 @@ func TestSentenceDistractorsShareContentWithTheCorrectAnswer(t *testing.T) {
 			continue
 		}
 		correctIsSchool := schoolTranslations[item.Options[item.CorrectIndex]]
-		if !correctIsSchool {
+		for _, option := range item.Options {
+			if schoolTranslations[option] != correctIsSchool {
+				t.Fatalf("prompt %q mixes topics in options %v", item.Prompt, item.Options)
+			}
+		}
+	}
+}
+
+func TestSentenceDistractorsMatchGrammaticalStructure(t *testing.T) {
+	t.Parallel()
+
+	grammar := []assessment.GrammarCandidate{
+		{ID: "N5#n1", Example: "私はコーヒーが好きではありません", ExampleTranslation: "I do not like coffee"},
+		{ID: "N5#n2", Example: "私は紅茶が好きではありません", ExampleTranslation: "I do not like black tea"},
+		{ID: "N5#n3", Example: "彼は牛乳が好きではありません", ExampleTranslation: "He does not like milk"},
+		{ID: "N5#n4", Example: "犬が好きではありません", ExampleTranslation: "I do not like dogs"},
+		{ID: "N5#p1", Example: "私はコーヒーが好きです", ExampleTranslation: "I like coffee"},
+		{ID: "N5#p2", Example: "猫が好きです", ExampleTranslation: "I like cats"},
+		{ID: "N5#p3", Example: "彼は音楽が好きです", ExampleTranslation: "He likes music"},
+		{ID: "N5#p4", Example: "妹は花が好きです", ExampleTranslation: "My sister likes flowers"},
+	}
+	negative := map[string]bool{
+		"I do not like coffee": true, "I do not like black tea": true,
+		"He does not like milk": true, "I do not like dogs": true,
+	}
+
+	stage, err := assessment.BuildStage("N5", 1, vocabPool(20, false), grammar, testRand())
+	if err != nil {
+		t.Fatalf("BuildStage: %v", err)
+	}
+	for _, item := range stage.Items {
+		if item.Kind != assessment.KindGrammar {
 			continue
 		}
+		correctIsNegative := negative[item.Options[item.CorrectIndex]]
 		for _, option := range item.Options {
-			if !schoolTranslations[option] {
-				t.Fatalf("prompt %q has unrelated distractor in %v", item.Prompt, item.Options)
+			if negative[option] != correctIsNegative {
+				t.Fatalf("prompt %q mixes polarity in options %v", item.Prompt, item.Options)
 			}
 		}
 	}
@@ -183,7 +215,7 @@ func TestSentenceDistractorsShareContentWithTheCorrectAnswer(t *testing.T) {
 func TestBuildStageFallsBackToVocabWhenPoolsAreThin(t *testing.T) {
 	t.Parallel()
 
-	stage, err := assessment.BuildStage("N5", vocabPool(20, false), nil, testRand())
+	stage, err := assessment.BuildStage("N5", 0, vocabPool(20, false), nil, testRand())
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
@@ -200,7 +232,7 @@ func TestBuildStageFallsBackToVocabWhenPoolsAreThin(t *testing.T) {
 func TestBuildStageRejectsInsufficientVocabulary(t *testing.T) {
 	t.Parallel()
 
-	if _, err := assessment.BuildStage("A1", vocabPool(3, false), nil, testRand()); !errors.Is(err, assessment.ErrInsufficientReference) {
+	if _, err := assessment.BuildStage("A1", 0, vocabPool(3, false), nil, testRand()); !errors.Is(err, assessment.ErrInsufficientReference) {
 		t.Fatalf("error = %v, want ErrInsufficientReference", err)
 	}
 }
@@ -212,7 +244,7 @@ func newStartedSession(t *testing.T) assessment.Session {
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
-	stage, err := assessment.BuildStage(session.Bands[0], vocabPool(20, true), grammarPool(6), testRand())
+	stage, err := assessment.BuildStage(session.Bands[0], 0, vocabPool(20, true), grammarPool(6), testRand())
 	if err != nil {
 		t.Fatalf("BuildStage: %v", err)
 	}
@@ -304,7 +336,7 @@ func runToCompletion(t *testing.T, correctByBand map[string]int) assessment.Sess
 		}
 		session = next
 		if band, ok := assessment.NextBand(session); ok {
-			built, err := assessment.BuildStage(band, vocabPool(20, true), grammarPool(6), testRand())
+			built, err := assessment.BuildStage(band, 0, vocabPool(20, true), grammarPool(6), testRand())
 			if err != nil {
 				t.Fatalf("BuildStage %s: %v", band, err)
 			}
