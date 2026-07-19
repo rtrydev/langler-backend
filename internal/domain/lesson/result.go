@@ -112,6 +112,11 @@ func resultScale(exercise Exercise) (string, int) {
 			return gradingAuto, 0
 		}
 		return gradingAuto, len(exercise.Matching.Pairs)
+	case TypeMultipleChoice:
+		if exercise.MultipleChoice == nil {
+			return gradingAuto, 0
+		}
+		return gradingAuto, len(exercise.MultipleChoice.Questions)
 	case TypeReading:
 		total := 0
 		if exercise.Reading != nil {

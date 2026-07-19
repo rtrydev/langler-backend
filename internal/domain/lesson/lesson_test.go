@@ -238,6 +238,61 @@ func TestNewCollectsIssues(t *testing.T) {
 			wantPath: "exercises[0].payload.questions[0].answer",
 		},
 		{
+			name: "standalone multiple choice answer not among options",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises = append(l.Exercises, lesson.Exercise{
+					ID:   "ex-3",
+					Type: lesson.TypeMultipleChoice,
+					MultipleChoice: &lesson.MultipleChoice{Questions: []lesson.MCQuestion{{
+						Question: "「行きました」はどういう意味ですか。",
+						Options:  []string{"went", "ate"},
+						Answer:   "ran",
+					}}},
+				})
+			},
+			wantPath: "exercises[2].payload.questions[0].answer",
+		},
+		{
+			name: "multiple choice without questions",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises = append(l.Exercises, lesson.Exercise{
+					ID:             "ex-3",
+					Type:           lesson.TypeMultipleChoice,
+					MultipleChoice: &lesson.MultipleChoice{},
+				})
+			},
+			wantPath: "exercises[2].payload.questions",
+		},
+		{
+			name: "word bank missing a blank answer",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[1].Cloze.WordBank = []string{"週末", "食べ"}
+			},
+			wantPath: "exercises[1].payload.blanks[1].answer",
+		},
+		{
+			name: "word bank duplicate entry",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[1].Cloze.WordBank = []string{"週末", "行き", "週末"}
+			},
+			wantPath: "exercises[1].payload.wordBank[2]",
+		},
+		{
+			name: "short answer alternates without answer",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[0].Reading.Questions[1].Answer = ""
+				l.Exercises[0].Reading.Questions[1].Alternates = []string{"友達"}
+			},
+			wantPath: "exercises[0].payload.questions[1].alternates",
+		},
+		{
+			name: "multiple choice question alternates rejected",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[0].Reading.Questions[0].Alternates = []string{"お茶"}
+			},
+			wantPath: "exercises[0].payload.questions[0].alternates",
+		},
+		{
 			name: "control characters rejected",
 			mutate: func(l *lesson.Lesson) {
 				l.Description = "bad\x00text"
@@ -285,6 +340,31 @@ func TestNewCollectsIssues(t *testing.T) {
 			}
 			t.Errorf("issue paths = %v, want to include %q", paths, tt.wantPath)
 		})
+	}
+}
+
+func TestNewAcceptsMultipleChoiceAndWordBank(t *testing.T) {
+	t.Parallel()
+
+	candidate := validLesson()
+	candidate.Exercises[1].Cloze.WordBank = []string{"週末", "行き", "食べ", "月曜日"}
+	candidate.Exercises = append(candidate.Exercises, lesson.Exercise{
+		ID:     "ex-3",
+		Type:   lesson.TypeMultipleChoice,
+		Prompt: "Choose the correct meaning.",
+		Points: 6,
+		MultipleChoice: &lesson.MultipleChoice{
+			Questions: []lesson.MCQuestion{
+				{
+					Question: "「行きました」はどういう意味ですか。",
+					Options:  []string{"went", "ate", "drank"},
+					Answer:   "went",
+				},
+			},
+		},
+	})
+	if _, err := lesson.New(candidate); err != nil {
+		t.Fatalf("New: %v", err)
 	}
 }
 

@@ -22,7 +22,7 @@ and the future agentic import path share this contract.
   "exercises": [
     {
       "exerciseId": "unique within the lesson",
-      "type": "cloze | translation | ordering | matching | reading | writing_prompt | script_practice",
+      "type": "cloze | translation | ordering | matching | multiple_choice | reading | writing_prompt | script_practice",
       "prompt": "learner-facing instruction",
       "points": 8,
       "referencedVocab": ["N4#1311125"],
@@ -38,11 +38,12 @@ tolerated and ignored). Payload shapes by type:
 
 | Type | Payload |
 |---|---|
-| `cloze` | `{"text": "…{{1}}…", "blanks": [{"index": 1, "answer": "…", "alternates"?: ["…"], "hint"?}]}` — markers and blanks must match 1:1 |
+| `cloze` | `{"text": "…{{1}}…", "blanks": [{"index": 1, "answer": "…", "alternates"?: ["…"], "hint"?}], "wordBank"?: ["…"]}` — markers and blanks must match 1:1; when `wordBank` is present every blank answer must appear in it (the player then renders tap-to-select choices instead of a text input) |
 | `translation` | `{"source": "…", "reference"?}` |
 | `ordering` | `{"items": ["…"], "translation"?}` — items in correct order, 2–20 |
 | `matching` | `{"pairs": [{"left": "…", "right": "…"}]}` — 2–20 pairs |
-| `reading` | `{"genre": "short_story", "title", "passage", "annotations"?: [{"surface", "reading"?, "gloss"?}], "questions": [{"question", "kind": "multiple_choice"\|"short_answer", "options"?, "answer"?}]}` |
+| `multiple_choice` | `{"questions": [{"question", "options": ["…"], "answer"}]}` — 1–10 questions, 2–6 options each, `answer` must exactly equal one option; auto-graded |
+| `reading` | `{"genre": "short_story", "title", "passage", "annotations"?: [{"surface", "reading"?, "gloss"?}], "questions": [{"question", "kind": "multiple_choice"\|"short_answer", "options"?, "answer"?, "alternates"?}]}` — `alternates` (short-answer only) lists additional accepted answers |
 | `writing_prompt` | optional `{"guidance"?, "modelAnswer"?}`; the task lives in `prompt` |
 | `script_practice` | `{"items": [{"glyph", "reading"?, "meaning"?}]}` |
 

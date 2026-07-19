@@ -436,6 +436,9 @@ func TestBuildConnectedPromptIncludesStoryAndReference(t *testing.T) {
 		`"readingStage": "connected"`,
 		"JLPT N4",
 		"cloze, reading",
+		"wordBank",
+		"multiple-choice comprehension questions",
+		`comprehension questions must use "kind": "multiple_choice"`,
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q", want)

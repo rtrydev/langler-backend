@@ -64,6 +64,51 @@ func TestNewResultValidatesBreakdownAgainstLesson(t *testing.T) {
 	}
 }
 
+func TestNewResultGradesMultipleChoiceAutomatically(t *testing.T) {
+	t.Parallel()
+
+	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+	source := lesson.Lesson{
+		ID: "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		Exercises: []lesson.Exercise{
+			{
+				ID:     "ex-1",
+				Type:   lesson.TypeMultipleChoice,
+				Points: 6,
+				MultipleChoice: &lesson.MultipleChoice{
+					Questions: []lesson.MCQuestion{
+						{Question: "q1", Options: []string{"a", "b"}, Answer: "a"},
+						{Question: "q2", Options: []string{"a", "b"}, Answer: "b"},
+						{Question: "q3", Options: []string{"a", "b"}, Answer: "a"},
+					},
+				},
+			},
+		},
+	}
+	result := lesson.Result{
+		AttemptID:   "11111111-1111-4111-8111-111111111111",
+		LessonID:    source.ID,
+		StartedAt:   started,
+		CompletedAt: started.Add(time.Minute),
+		Score:       4,
+		MaxScore:    6,
+		AutoScore:   4,
+		AutoMax:     6,
+		Exercises: []lesson.ExerciseResult{
+			{ExerciseID: "ex-1", Type: lesson.TypeMultipleChoice, Grading: "auto", Score: 4, MaxScore: 6, Correct: 2, Total: 3},
+		},
+	}
+	if _, err := lesson.NewResult(result, source); err != nil {
+		t.Fatalf("NewResult: %v", err)
+	}
+
+	result.Exercises[0].Grading = "self"
+	result.SelfScore, result.SelfMax, result.AutoScore, result.AutoMax = 4, 6, 0, 0
+	if _, err := lesson.NewResult(result, source); !errors.Is(err, lesson.ErrInvalidResult) {
+		t.Fatalf("NewResult(self-graded multiple choice) error = %v, want ErrInvalidResult", err)
+	}
+}
+
 func validResult() (lesson.Lesson, lesson.Result) {
 	started := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	source := lesson.Lesson{

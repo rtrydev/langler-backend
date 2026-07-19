@@ -138,7 +138,7 @@ func normalizePromptQuery(query inbound.LessonPromptQuery) (promptRequest, error
 			return t == domain.TypeReading
 		})
 		if len(request.exerciseTypes) == 0 && len(issues) == 0 {
-			request.exerciseTypes = []domain.ExerciseType{domain.TypeScriptPractice, domain.TypeMatching, domain.TypeCloze}
+			request.exerciseTypes = []domain.ExerciseType{domain.TypeScriptPractice, domain.TypeMatching, domain.TypeMultipleChoice, domain.TypeCloze}
 		}
 	}
 
@@ -392,10 +392,10 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 		fmt.Fprintf(&b, "- Write a short, original story appropriate for %s: a coherent miniature narrative on the topic, not disconnected sentences.\n", levelLabel)
 		fmt.Fprintf(&b, "- Work every target vocabulary and grammar item into the story in natural context and introduce as little language outside the reference list as possible.\n")
 		fmt.Fprintf(&b, "- Annotate every target vocabulary word in \"annotations\" with its reading and gloss so the learner can decode it on first contact.\n")
-		fmt.Fprintf(&b, "- Give the story a title and 2-4 comprehension questions answerable from the passage alone.\n\n")
+		fmt.Fprintf(&b, "- Give the story a title and 2-4 multiple-choice comprehension questions answerable from the passage alone.\n\n")
 		fmt.Fprintf(&b, "## Teaching flow\n")
 		fmt.Fprintf(&b, "This is the learner's first encounter with the material; the lesson teaches, it does not quiz prior knowledge.\n")
-		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching and script practice before cloze, cloze before ordering, translation and writing last.\n")
+		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching, multiple choice, and script practice before cloze, cloze before ordering, translation and writing last.\n")
 		fmt.Fprintf(&b, "- Never require a word or pattern that the story or an earlier exercise has not already introduced.\n")
 		fmt.Fprintf(&b, "- Give every cloze blank in the first half of the lesson a \"hint\"; later exercises may drop hints as the learner warms up.\n")
 		fmt.Fprintf(&b, "- Keep the first exercises after the story answerable straight from the story context and raise the difficulty gradually toward free production at the end.\n\n")
@@ -446,11 +446,12 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	fmt.Fprintf(&b, "Every exercise object has:\n")
 	fmt.Fprintf(&b, "{\"exerciseId\": \"ex-1\", \"type\": \"<type>\", \"prompt\": \"<learner-facing instruction>\", \"points\": 1-20, \"referencedVocab\": [\"<id>\"], \"referencedGrammar\": [\"<id>\"], \"payload\": {...}}\n")
 	fmt.Fprintf(&b, "exerciseId values must be unique. Payload shapes by type:\n")
-	fmt.Fprintf(&b, "- cloze: {\"text\": \"sentence with {{1}} and {{2}} markers\", \"blanks\": [{\"index\": 1, \"answer\": \"...\", \"hint\": \"optional\"}]} - every {{n}} marker needs exactly one blank with that index.\n")
+	fmt.Fprintf(&b, "- cloze: {\"text\": \"sentence with {{1}} and {{2}} markers\", \"blanks\": [{\"index\": 1, \"answer\": \"...\", \"hint\": \"optional\"}], \"wordBank\": [\"...\"]} - every {{n}} marker needs exactly one blank with that index. Always include a wordBank: every blank's answer plus 3-6 plausible same-level distractors, in random order, so the learner selects instead of typing.\n")
 	fmt.Fprintf(&b, "- translation: {\"source\": \"<sentence in %s>\", \"reference\": \"<English translation>\"}\n", languageNames[request.language])
 	fmt.Fprintf(&b, "- ordering: {\"items\": [\"...\", \"...\"], \"translation\": \"optional\"} - list 2-20 items in the CORRECT order; the app shuffles them for the learner.\n")
 	fmt.Fprintf(&b, "- matching: {\"pairs\": [{\"left\": \"<target language>\", \"right\": \"<meaning>\"}]} - 2-20 pairs.\n")
-	fmt.Fprintf(&b, "- reading: {\"genre\": \"short_story\", \"title\": \"...\", \"passage\": \"...\", \"annotations\": [{\"surface\": \"...\", \"reading\": \"...\", \"gloss\": \"...\"}], \"questions\": [{\"question\": \"...\", \"kind\": \"multiple_choice\", \"options\": [\"...\"], \"answer\": \"<must equal one option>\"}]} - questions may also use {\"kind\": \"short_answer\", \"answer\": \"...\"} with no options.\n")
+	fmt.Fprintf(&b, "- multiple_choice: {\"questions\": [{\"question\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"answer\": \"<must exactly equal one option>\"}]} - 1-10 questions, each with 3-4 options and exactly one correct answer. Make distractors plausible: same word class and level, wrong in meaning or usage.\n")
+	fmt.Fprintf(&b, "- reading: {\"genre\": \"short_story\", \"title\": \"...\", \"passage\": \"...\", \"annotations\": [{\"surface\": \"...\", \"reading\": \"...\", \"gloss\": \"...\"}], \"questions\": [{\"question\": \"...\", \"kind\": \"multiple_choice\", \"options\": [\"...\"], \"answer\": \"<must equal one option>\"}]} - comprehension questions must use \"kind\": \"multiple_choice\" so the app can grade them; only use {\"kind\": \"short_answer\", \"answer\": \"...\", \"alternates\": [\"...\"]} when a question genuinely cannot be closed-form, and then list every accepted phrasing in alternates.\n")
 	fmt.Fprintf(&b, "- writing_prompt: put the writing task in the exercise's \"prompt\"; payload is optional: {\"guidance\": \"...\", \"modelAnswer\": \"...\"}\n")
 	fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n\n")
 	fmt.Fprintf(&b, "## Constraints\n")

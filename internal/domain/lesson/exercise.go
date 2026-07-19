@@ -15,6 +15,7 @@ const (
 	TypeTranslation    ExerciseType = "translation"
 	TypeOrdering       ExerciseType = "ordering"
 	TypeMatching       ExerciseType = "matching"
+	TypeMultipleChoice ExerciseType = "multiple_choice"
 	TypeReading        ExerciseType = "reading"
 	TypeWritingPrompt  ExerciseType = "writing_prompt"
 	TypeScriptPractice ExerciseType = "script_practice"
@@ -25,7 +26,7 @@ const GenreShortStory = "short_story"
 func ExerciseTypes() []ExerciseType {
 	return []ExerciseType{
 		TypeCloze, TypeTranslation, TypeOrdering, TypeMatching,
-		TypeReading, TypeWritingPrompt, TypeScriptPractice,
+		TypeMultipleChoice, TypeReading, TypeWritingPrompt, TypeScriptPractice,
 	}
 }
 
@@ -44,14 +45,16 @@ type Exercise struct {
 	Translation       *Translation
 	Ordering          *Ordering
 	Matching          *Matching
+	MultipleChoice    *MultipleChoice
 	Reading           *Reading
 	WritingPrompt     *WritingPrompt
 	ScriptPractice    *ScriptPractice
 }
 
 type Cloze struct {
-	Text   string
-	Blanks []Blank
+	Text     string
+	Blanks   []Blank
+	WordBank []string
 }
 
 type Blank struct {
@@ -73,6 +76,16 @@ type Ordering struct {
 
 type Matching struct {
 	Pairs []Pair
+}
+
+type MultipleChoice struct {
+	Questions []MCQuestion
+}
+
+type MCQuestion struct {
+	Question string
+	Options  []string
+	Answer   string
 }
 
 type Pair struct {
@@ -100,10 +113,11 @@ const (
 )
 
 type Question struct {
-	Question string
-	Kind     string
-	Options  []string
-	Answer   string
+	Question   string
+	Kind       string
+	Options    []string
+	Answer     string
+	Alternates []string
 }
 
 type WritingPrompt struct {
@@ -128,6 +142,7 @@ const (
 	maxReferencesPerSet = 30
 	maxClozeTextLen     = 3000
 	maxBlanks           = 20
+	maxWordBankEntries  = 40
 	maxAnswerLen        = 120
 	maxAlternateAnswers = 10
 	maxHintLen          = 200
@@ -201,6 +216,12 @@ func validateExercise(c *collector, path string, e *Exercise) {
 			return
 		}
 		validateMatching(c, payload, e.Matching)
+	case TypeMultipleChoice:
+		if e.MultipleChoice == nil {
+			c.add(payload, "a %q exercise requires a payload with questions", e.Type)
+			return
+		}
+		validateMultipleChoice(c, payload, e.MultipleChoice)
 	case TypeReading:
 		if e.Reading == nil {
 			c.add(payload, "a %q exercise requires a payload with a genre, title, passage, and questions", e.Type)
@@ -249,6 +270,20 @@ func validateCloze(c *collector, path string, p *Cloze) {
 		c.add(path+".blanks", "must contain at most %d blanks", maxBlanks)
 	}
 
+	if len(p.WordBank) > maxWordBankEntries {
+		c.add(path+".wordBank", "must contain at most %d entries", maxWordBankEntries)
+	}
+	bank := map[string]bool{}
+	for i := range p.WordBank {
+		p.WordBank[i] = strings.TrimSpace(p.WordBank[i])
+		entryPath := fmt.Sprintf("%s.wordBank[%d]", path, i)
+		c.text(entryPath, p.WordBank[i], maxAnswerLen, true)
+		if bank[p.WordBank[i]] {
+			c.add(entryPath, "duplicates word bank entry %q", p.WordBank[i])
+		}
+		bank[p.WordBank[i]] = true
+	}
+
 	markers := map[int]int{}
 	for _, match := range blankMarkerPattern.FindAllStringSubmatch(p.Text, -1) {
 		index, err := strconv.Atoi(match[1])
@@ -271,6 +306,9 @@ func validateCloze(c *collector, path string, p *Cloze) {
 		declared[b.Index] = true
 		b.Answer = strings.TrimSpace(b.Answer)
 		c.text(blankPath+".answer", b.Answer, maxAnswerLen, true)
+		if len(p.WordBank) > 0 && b.Answer != "" && !bank[b.Answer] {
+			c.add(blankPath+".answer", "must appear in the wordBank so the learner can select it")
+		}
 		if len(b.Alternates) > maxAlternateAnswers {
 			c.add(blankPath+".alternates", "must contain at most %d alternate answers", maxAlternateAnswers)
 		}
@@ -329,6 +367,34 @@ func validateMatching(c *collector, path string, p *Matching) {
 	}
 }
 
+func validateMultipleChoice(c *collector, path string, p *MultipleChoice) {
+	if len(p.Questions) == 0 {
+		c.add(path+".questions", "must contain at least one question")
+	}
+	if len(p.Questions) > maxQuestions {
+		c.add(path+".questions", "must contain at most %d questions", maxQuestions)
+	}
+	for i := range p.Questions {
+		q := &p.Questions[i]
+		questionPath := fmt.Sprintf("%s.questions[%d]", path, i)
+		q.Question = strings.TrimSpace(q.Question)
+		c.text(questionPath+".question", q.Question, maxQuestionLen, true)
+		if len(q.Options) < 2 || len(q.Options) > maxOptions {
+			c.add(questionPath+".options", "must contain between 2 and %d options", maxOptions)
+		}
+		for j := range q.Options {
+			q.Options[j] = strings.TrimSpace(q.Options[j])
+			c.text(fmt.Sprintf("%s.options[%d]", questionPath, j), q.Options[j], maxOptionLen, true)
+		}
+		q.Answer = strings.TrimSpace(q.Answer)
+		if q.Answer == "" {
+			c.add(questionPath+".answer", "must not be empty")
+		} else if !slices.Contains(q.Options, q.Answer) {
+			c.add(questionPath+".answer", "must exactly match one of the options")
+		}
+	}
+}
+
 func validateReading(c *collector, path string, p *Reading) {
 	if p.Genre != GenreShortStory {
 		c.add(path+".genre", "must be %q", GenreShortStory)
@@ -378,11 +444,24 @@ func validateQuestion(c *collector, path string, q *Question) {
 		} else if !slices.Contains(q.Options, q.Answer) {
 			c.add(path+".answer", "must exactly match one of the options")
 		}
+		if len(q.Alternates) > 0 {
+			c.add(path+".alternates", "must be omitted for a %q question", KindMultipleChoice)
+		}
 	case KindShortAnswer:
 		if len(q.Options) > 0 {
 			c.add(path+".options", "must be omitted for a %q question", KindShortAnswer)
 		}
 		c.text(path+".answer", q.Answer, maxShortAnswerLen, false)
+		if len(q.Alternates) > maxAlternateAnswers {
+			c.add(path+".alternates", "must contain at most %d alternate answers", maxAlternateAnswers)
+		}
+		if len(q.Alternates) > 0 && strings.TrimSpace(q.Answer) == "" {
+			c.add(path+".alternates", "must be omitted when the question has no answer")
+		}
+		for i := range q.Alternates {
+			q.Alternates[i] = strings.TrimSpace(q.Alternates[i])
+			c.text(fmt.Sprintf("%s.alternates[%d]", path, i), q.Alternates[i], maxShortAnswerLen, true)
+		}
 	default:
 		c.add(path+".kind", "must be %q or %q", KindMultipleChoice, KindShortAnswer)
 	}

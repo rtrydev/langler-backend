@@ -36,14 +36,16 @@ type exerciseItem struct {
 	Translation       *translationItem    `dynamodbav:"translation,omitempty"`
 	Ordering          *orderingItem       `dynamodbav:"ordering,omitempty"`
 	Matching          *matchingItem       `dynamodbav:"matching,omitempty"`
+	MultipleChoice    *multipleChoiceItem `dynamodbav:"multipleChoice,omitempty"`
 	Reading           *readingItem        `dynamodbav:"reading,omitempty"`
 	WritingPrompt     *writingPromptItem  `dynamodbav:"writingPrompt,omitempty"`
 	ScriptPractice    *scriptPracticeItem `dynamodbav:"scriptPractice,omitempty"`
 }
 
 type clozeItem struct {
-	Text   string      `dynamodbav:"text"`
-	Blanks []blankItem `dynamodbav:"blanks"`
+	Text     string      `dynamodbav:"text"`
+	Blanks   []blankItem `dynamodbav:"blanks"`
+	WordBank []string    `dynamodbav:"wordBank,omitempty"`
 }
 
 type blankItem struct {
@@ -98,6 +100,16 @@ type pairItem struct {
 	Right string `dynamodbav:"right"`
 }
 
+type multipleChoiceItem struct {
+	Questions []mcQuestionItem `dynamodbav:"questions"`
+}
+
+type mcQuestionItem struct {
+	Question string   `dynamodbav:"question"`
+	Options  []string `dynamodbav:"options"`
+	Answer   string   `dynamodbav:"answer"`
+}
+
 type readingItem struct {
 	Genre       string           `dynamodbav:"genre"`
 	Title       string           `dynamodbav:"title"`
@@ -113,10 +125,11 @@ type annotationItem struct {
 }
 
 type questionItem struct {
-	Question string   `dynamodbav:"question"`
-	Kind     string   `dynamodbav:"kind"`
-	Options  []string `dynamodbav:"options,omitempty"`
-	Answer   string   `dynamodbav:"answer,omitempty"`
+	Question   string   `dynamodbav:"question"`
+	Kind       string   `dynamodbav:"kind"`
+	Options    []string `dynamodbav:"options,omitempty"`
+	Answer     string   `dynamodbav:"answer,omitempty"`
+	Alternates []string `dynamodbav:"alternates,omitempty"`
 }
 
 type writingPromptItem struct {
@@ -172,7 +185,7 @@ func toExerciseItem(e domain.Exercise) exerciseItem {
 		for _, blank := range e.Cloze.Blanks {
 			blanks = append(blanks, blankItem(blank))
 		}
-		item.Cloze = &clozeItem{Text: e.Cloze.Text, Blanks: blanks}
+		item.Cloze = &clozeItem{Text: e.Cloze.Text, Blanks: blanks, WordBank: e.Cloze.WordBank}
 	}
 	if e.Translation != nil {
 		item.Translation = &translationItem{Source: e.Translation.Source, Reference: e.Translation.Reference}
@@ -186,6 +199,13 @@ func toExerciseItem(e domain.Exercise) exerciseItem {
 			pairs = append(pairs, pairItem(pair))
 		}
 		item.Matching = &matchingItem{Pairs: pairs}
+	}
+	if e.MultipleChoice != nil {
+		questions := make([]mcQuestionItem, 0, len(e.MultipleChoice.Questions))
+		for _, question := range e.MultipleChoice.Questions {
+			questions = append(questions, mcQuestionItem(question))
+		}
+		item.MultipleChoice = &multipleChoiceItem{Questions: questions}
 	}
 	if e.Reading != nil {
 		annotations := make([]annotationItem, 0, len(e.Reading.Annotations))
@@ -252,7 +272,7 @@ func (item exerciseItem) toDomain() domain.Exercise {
 		for _, blank := range item.Cloze.Blanks {
 			blanks = append(blanks, domain.Blank(blank))
 		}
-		e.Cloze = &domain.Cloze{Text: item.Cloze.Text, Blanks: blanks}
+		e.Cloze = &domain.Cloze{Text: item.Cloze.Text, Blanks: blanks, WordBank: item.Cloze.WordBank}
 	}
 	if item.Translation != nil {
 		e.Translation = &domain.Translation{Source: item.Translation.Source, Reference: item.Translation.Reference}
@@ -266,6 +286,13 @@ func (item exerciseItem) toDomain() domain.Exercise {
 			pairs = append(pairs, domain.Pair(pair))
 		}
 		e.Matching = &domain.Matching{Pairs: pairs}
+	}
+	if item.MultipleChoice != nil {
+		questions := make([]domain.MCQuestion, 0, len(item.MultipleChoice.Questions))
+		for _, question := range item.MultipleChoice.Questions {
+			questions = append(questions, domain.MCQuestion(question))
+		}
+		e.MultipleChoice = &domain.MultipleChoice{Questions: questions}
 	}
 	if item.Reading != nil {
 		annotations := make([]domain.Annotation, 0, len(item.Reading.Annotations))

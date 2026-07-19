@@ -60,8 +60,9 @@ type exerciseDocument struct {
 }
 
 type clozePayload struct {
-	Text   string         `json:"text"`
-	Blanks []blankPayload `json:"blanks"`
+	Text     string         `json:"text"`
+	Blanks   []blankPayload `json:"blanks"`
+	WordBank []string       `json:"wordBank,omitempty"`
 }
 
 type blankPayload struct {
@@ -114,6 +115,16 @@ type pairPayload struct {
 	Right string `json:"right"`
 }
 
+type multipleChoicePayload struct {
+	Questions []mcQuestionPayload `json:"questions"`
+}
+
+type mcQuestionPayload struct {
+	Question string   `json:"question"`
+	Options  []string `json:"options"`
+	Answer   string   `json:"answer"`
+}
+
 type readingPayload struct {
 	Genre       string              `json:"genre"`
 	Title       string              `json:"title"`
@@ -129,10 +140,11 @@ type annotationPayload struct {
 }
 
 type questionPayload struct {
-	Question string   `json:"question"`
-	Kind     string   `json:"kind"`
-	Options  []string `json:"options,omitempty"`
-	Answer   string   `json:"answer,omitempty"`
+	Question   string   `json:"question"`
+	Kind       string   `json:"kind"`
+	Options    []string `json:"options,omitempty"`
+	Answer     string   `json:"answer,omitempty"`
+	Alternates []string `json:"alternates,omitempty"`
 }
 
 type writingPromptPayload struct {
@@ -507,6 +519,11 @@ func decodeExercise(doc exerciseDocument, path string) (lesson.Exercise, []issue
 		if issue = decodeStrict(doc.Payload, payload, payloadPath); issue == nil {
 			exercise.Matching = toMatchingDomain(payload)
 		}
+	case lesson.TypeMultipleChoice:
+		payload := &multipleChoicePayload{}
+		if issue = decodeStrict(doc.Payload, payload, payloadPath); issue == nil {
+			exercise.MultipleChoice = toMultipleChoiceDomain(payload)
+		}
 	case lesson.TypeReading:
 		payload := &readingPayload{}
 		if issue = decodeStrict(doc.Payload, payload, payloadPath); issue == nil {
@@ -567,7 +584,15 @@ func toClozeDomain(payload *clozePayload) *lesson.Cloze {
 	for _, blank := range payload.Blanks {
 		blanks = append(blanks, lesson.Blank{Index: blank.Index, Answer: blank.Answer, Alternates: blank.Alternates, Hint: blank.Hint})
 	}
-	return &lesson.Cloze{Text: payload.Text, Blanks: blanks}
+	return &lesson.Cloze{Text: payload.Text, Blanks: blanks, WordBank: payload.WordBank}
+}
+
+func toMultipleChoiceDomain(payload *multipleChoicePayload) *lesson.MultipleChoice {
+	questions := make([]lesson.MCQuestion, 0, len(payload.Questions))
+	for _, question := range payload.Questions {
+		questions = append(questions, lesson.MCQuestion{Question: question.Question, Options: question.Options, Answer: question.Answer})
+	}
+	return &lesson.MultipleChoice{Questions: questions}
 }
 
 func toMatchingDomain(payload *matchingPayload) *lesson.Matching {
@@ -590,10 +615,11 @@ func toReadingDomain(payload *readingPayload) *lesson.Reading {
 	questions := make([]lesson.Question, 0, len(payload.Questions))
 	for _, question := range payload.Questions {
 		questions = append(questions, lesson.Question{
-			Question: question.Question,
-			Kind:     question.Kind,
-			Options:  question.Options,
-			Answer:   question.Answer,
+			Question:   question.Question,
+			Kind:       question.Kind,
+			Options:    question.Options,
+			Answer:     question.Answer,
+			Alternates: question.Alternates,
 		})
 	}
 	return &lesson.Reading{
@@ -745,7 +771,7 @@ func toExerciseDocument(exercise lesson.Exercise) exerciseDocument {
 		for _, blank := range exercise.Cloze.Blanks {
 			blanks = append(blanks, blankPayload{Index: blank.Index, Answer: blank.Answer, Alternates: blank.Alternates, Hint: blank.Hint})
 		}
-		payload = clozePayload{Text: exercise.Cloze.Text, Blanks: blanks}
+		payload = clozePayload{Text: exercise.Cloze.Text, Blanks: blanks, WordBank: exercise.Cloze.WordBank}
 	case exercise.Translation != nil:
 		payload = translationPayload{Source: exercise.Translation.Source, Reference: exercise.Translation.Reference}
 	case exercise.Ordering != nil:
@@ -756,6 +782,12 @@ func toExerciseDocument(exercise lesson.Exercise) exerciseDocument {
 			pairs = append(pairs, pairPayload{Left: pair.Left, Right: pair.Right})
 		}
 		payload = matchingPayload{Pairs: pairs}
+	case exercise.MultipleChoice != nil:
+		questions := make([]mcQuestionPayload, 0, len(exercise.MultipleChoice.Questions))
+		for _, question := range exercise.MultipleChoice.Questions {
+			questions = append(questions, mcQuestionPayload{Question: question.Question, Options: question.Options, Answer: question.Answer})
+		}
+		payload = multipleChoicePayload{Questions: questions}
 	case exercise.Reading != nil:
 		annotations := make([]annotationPayload, 0, len(exercise.Reading.Annotations))
 		for _, annotation := range exercise.Reading.Annotations {
@@ -768,10 +800,11 @@ func toExerciseDocument(exercise lesson.Exercise) exerciseDocument {
 		questions := make([]questionPayload, 0, len(exercise.Reading.Questions))
 		for _, question := range exercise.Reading.Questions {
 			questions = append(questions, questionPayload{
-				Question: question.Question,
-				Kind:     question.Kind,
-				Options:  question.Options,
-				Answer:   question.Answer,
+				Question:   question.Question,
+				Kind:       question.Kind,
+				Options:    question.Options,
+				Answer:     question.Answer,
+				Alternates: question.Alternates,
 			})
 		}
 		payload = readingPayload{
