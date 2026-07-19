@@ -177,14 +177,22 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 
 	if request.stage == domain.StageConnected {
 		fmt.Fprintf(&b, "## Story requirement\n")
-		fmt.Fprintf(&b, "The lesson must end with a \"reading\" exercise whose payload has \"genre\": \"short_story\".\n")
+		fmt.Fprintf(&b, "The lesson must open with a \"reading\" exercise whose payload has \"genre\": \"short_story\". It is the first exercise in the array: the learner meets the lesson's language there before anything tests it.\n")
 		fmt.Fprintf(&b, "- Write a short, original story appropriate for %s: a coherent miniature narrative on the topic, not disconnected sentences.\n", levelLabel)
-		fmt.Fprintf(&b, "- Use the lesson's target vocabulary and grammar in context and introduce as little language outside the reference list as possible.\n")
-		fmt.Fprintf(&b, "- Give the story a title and 2-4 comprehension questions about its content.\n\n")
+		fmt.Fprintf(&b, "- Work every target vocabulary and grammar item into the story in natural context and introduce as little language outside the reference list as possible.\n")
+		fmt.Fprintf(&b, "- Annotate every target vocabulary word in \"annotations\" with its reading and gloss so the learner can decode it on first contact.\n")
+		fmt.Fprintf(&b, "- Give the story a title and 2-4 comprehension questions answerable from the passage alone.\n\n")
+		fmt.Fprintf(&b, "## Teaching flow\n")
+		fmt.Fprintf(&b, "This is the learner's first encounter with the material; the lesson teaches, it does not quiz prior knowledge.\n")
+		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching and script practice before cloze, cloze before ordering, translation and writing last.\n")
+		fmt.Fprintf(&b, "- Never require a word or pattern that the story or an earlier exercise has not already introduced.\n")
+		fmt.Fprintf(&b, "- Give every cloze blank in the first half of the lesson a \"hint\"; later exercises may drop hints as the learner warms up.\n")
+		fmt.Fprintf(&b, "- Keep the first exercises after the story answerable straight from the story context and raise the difficulty gradually toward free production at the end.\n\n")
 	} else {
 		fmt.Fprintf(&b, "## Foundational lesson\n")
 		fmt.Fprintf(&b, "This learner cannot decode connected text yet. Do not include any \"reading\" exercise or story.\n")
 		fmt.Fprintf(&b, "Focus on script practice, individual words, and very short sentences that build glyph recognition and sound-script associations.\n")
+		fmt.Fprintf(&b, "Introduce every glyph or word first (script practice or matching that shows its reading and meaning) before any exercise asks the learner to recall it, and raise the difficulty gradually.\n")
 		fmt.Fprintf(&b, "Set \"readingStage\": \"foundational\" in the output.\n\n")
 	}
 

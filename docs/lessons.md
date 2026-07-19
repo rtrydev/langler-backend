@@ -52,10 +52,11 @@ tolerated and ignored). Payload shapes by type:
    rejected, per-type payload decode, 256 KiB body cap.
 2. **Semantic** (`domain/lesson.New`): enum allow-lists, size limits, cross-field
    rules (cloze markers, multiple-choice answers among options, unique exercise
-   ids). A `connected` lesson must contain a `reading` exercise with
-   `genre: short_story`, a title, a non-empty passage, and at least one question;
-   `foundational` is the explicit opt-out while a learner cannot decode connected
-   text.
+   ids). A `connected` lesson must open with a `reading` exercise (its first
+   array element) with `genre: short_story`, a title, a non-empty passage, and at
+   least one question, so the story introduces the language before the exercises
+   test it; `foundational` is the explicit opt-out while a learner cannot decode
+   connected text.
 3. **Language hooks** (`domain/lesson` script hooks): Japanese content fields must
    contain Japanese script; a slot exists for Burmese orthography checks later.
 4. **Sanitization**: control characters and HTML/markup are rejected everywhere;
@@ -95,7 +96,8 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   Body: `{"language", "level", "topic"?, "exerciseTypes": [...],
   "readingStage"?, "length"?: "short"|"standard"|"long", "includeReference"?}`.
   `connected` (default) forces a `reading` exercise into the requested types and
-  demands a grounded short story; `foundational` removes it. With
+  demands a grounded short story that opens the lesson, followed by exercises
+  ordered from recognition to production; `foundational` removes it. With
   `includeReference` (default true) a slice of level-matched vocab and grammar
   with their reference ids is embedded.
 - `POST /lessons/import` — validate and store a lesson document with an

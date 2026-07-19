@@ -152,8 +152,8 @@ func New(candidate Lesson) (Lesson, error) {
 		c.add("exercises", "must reference at most %d vocabulary and grammar items in total", maxReferencesInAll)
 	}
 
-	if l.ReadingStage == StageConnected && !hasShortStory(l) {
-		c.add("exercises", "a %q lesson must include a reading exercise with genre %q, a title, a passage, and at least one comprehension question; set readingStage to %q only when the learner cannot decode connected text yet", StageConnected, GenreShortStory, StageFoundational)
+	if l.ReadingStage == StageConnected && !opensWithShortStory(l) {
+		c.add("exercises", "a %q lesson must open with a reading exercise as exercises[0] (genre %q, a title, a passage, and at least one comprehension question) so the story introduces the language before it is tested; set readingStage to %q only when the learner cannot decode connected text yet", StageConnected, GenreShortStory, StageFoundational)
 	}
 
 	if hook := scriptHooks[l.Language]; hook != nil {
@@ -166,15 +166,14 @@ func New(candidate Lesson) (Lesson, error) {
 	return l, nil
 }
 
-func hasShortStory(l Lesson) bool {
-	for _, e := range l.Exercises {
-		r := e.Reading
-		if e.Type == TypeReading && r != nil && r.Genre == GenreShortStory &&
-			strings.TrimSpace(r.Title) != "" && strings.TrimSpace(r.Passage) != "" && len(r.Questions) > 0 {
-			return true
-		}
+func opensWithShortStory(l Lesson) bool {
+	if len(l.Exercises) == 0 {
+		return false
 	}
-	return false
+	e := l.Exercises[0]
+	r := e.Reading
+	return e.Type == TypeReading && r != nil && r.Genre == GenreShortStory &&
+		strings.TrimSpace(r.Title) != "" && strings.TrimSpace(r.Passage) != "" && len(r.Questions) > 0
 }
 
 func joinValues[T ~string](values []T) string {

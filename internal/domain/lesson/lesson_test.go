@@ -24,21 +24,7 @@ func validLesson() lesson.Lesson {
 		EstimatedMinutes: 18,
 		Exercises: []lesson.Exercise{
 			{
-				ID:              "ex-1",
-				Type:            lesson.TypeCloze,
-				Prompt:          "Fill in the blanks.",
-				Points:          8,
-				ReferencedVocab: []string{"N4#1416220"},
-				Cloze: &lesson.Cloze{
-					Text: "先週の{{1}}、友達と京都へ{{2}}ました。",
-					Blanks: []lesson.Blank{
-						{Index: 1, Answer: "週末"},
-						{Index: 2, Answer: "行き", Hint: "polite past"},
-					},
-				},
-			},
-			{
-				ID:     "ex-2",
+				ID:     "ex-1",
 				Type:   lesson.TypeReading,
 				Prompt: "Read the story and answer the questions.",
 				Points: 12,
@@ -61,6 +47,20 @@ func validLesson() lesson.Lesson {
 							Kind:     lesson.KindShortAnswer,
 							Answer:   "友達と行きました。",
 						},
+					},
+				},
+			},
+			{
+				ID:              "ex-2",
+				Type:            lesson.TypeCloze,
+				Prompt:          "Fill in the blanks.",
+				Points:          8,
+				ReferencedVocab: []string{"N4#1416220"},
+				Cloze: &lesson.Cloze{
+					Text: "先週の{{1}}、友達と京都へ{{2}}ました。",
+					Blanks: []lesson.Blank{
+						{Index: 1, Answer: "週末"},
+						{Index: 2, Answer: "行き", Hint: "polite past"},
 					},
 				},
 			},
@@ -153,23 +153,30 @@ func TestNewCollectsIssues(t *testing.T) {
 		{
 			name: "connected lesson without story",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises = l.Exercises[:1]
+				l.Exercises = l.Exercises[1:]
+			},
+			wantPath: "exercises",
+		},
+		{
+			name: "connected lesson with story not first",
+			mutate: func(l *lesson.Lesson) {
+				l.Exercises[0], l.Exercises[1] = l.Exercises[1], l.Exercises[0]
 			},
 			wantPath: "exercises",
 		},
 		{
 			name: "story without questions",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[1].Reading.Questions = nil
+				l.Exercises[0].Reading.Questions = nil
 			},
-			wantPath: "exercises[1].payload.questions",
+			wantPath: "exercises[0].payload.questions",
 		},
 		{
 			name: "unknown exercise type",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Type = "reading_comp"
+				l.Exercises[1].Type = "quiz"
 			},
-			wantPath: "exercises[0].type",
+			wantPath: "exercises[1].type",
 		},
 		{
 			name: "duplicate exercise ids",
@@ -181,44 +188,44 @@ func TestNewCollectsIssues(t *testing.T) {
 		{
 			name: "cloze blank without answer",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Cloze.Blanks[1].Answer = ""
+				l.Exercises[1].Cloze.Blanks[1].Answer = ""
 			},
-			wantPath: "exercises[0].payload.blanks[1].answer",
+			wantPath: "exercises[1].payload.blanks[1].answer",
 		},
 		{
 			name: "cloze blank without marker",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Cloze.Blanks[1].Index = 9
+				l.Exercises[1].Cloze.Blanks[1].Index = 9
 			},
-			wantPath: "exercises[0].payload.blanks[1].index",
+			wantPath: "exercises[1].payload.blanks[1].index",
 		},
 		{
 			name: "cloze marker without blank",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Cloze.Text += "そして{{3}}。"
+				l.Exercises[1].Cloze.Text += "そして{{3}}。"
 			},
-			wantPath: "exercises[0].payload.blanks",
+			wantPath: "exercises[1].payload.blanks",
 		},
 		{
 			name: "missing payload",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Cloze = nil
+				l.Exercises[1].Cloze = nil
 			},
-			wantPath: "exercises[0].payload",
+			wantPath: "exercises[1].payload",
 		},
 		{
 			name: "bad reference id format",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].ReferencedVocab = []string{"lowercase#bad level"}
+				l.Exercises[1].ReferencedVocab = []string{"lowercase#bad level"}
 			},
-			wantPath: "exercises[0].referencedVocab[0]",
+			wantPath: "exercises[1].referencedVocab[0]",
 		},
 		{
 			name: "too many scheduled references",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].ReferencedVocab = make([]string, 100)
-				for index := range l.Exercises[0].ReferencedVocab {
-					l.Exercises[0].ReferencedVocab[index] = "N4#item-" + strconv.Itoa(index)
+				l.Exercises[1].ReferencedVocab = make([]string, 100)
+				for index := range l.Exercises[1].ReferencedVocab {
+					l.Exercises[1].ReferencedVocab[index] = "N4#item-" + strconv.Itoa(index)
 				}
 			},
 			wantPath: "exercises",
@@ -226,9 +233,9 @@ func TestNewCollectsIssues(t *testing.T) {
 		{
 			name: "multiple choice answer not among options",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[1].Reading.Questions[0].Answer = "お茶"
+				l.Exercises[0].Reading.Questions[0].Answer = "お茶"
 			},
-			wantPath: "exercises[1].payload.questions[0].answer",
+			wantPath: "exercises[0].payload.questions[0].answer",
 		},
 		{
 			name: "control characters rejected",
@@ -240,23 +247,23 @@ func TestNewCollectsIssues(t *testing.T) {
 		{
 			name: "html rejected",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[1].Reading.Passage = "<script>alert('x')</script>先週の週末、京都へ行きました。"
+				l.Exercises[0].Reading.Passage = "<script>alert('x')</script>先週の週末、京都へ行きました。"
 			},
-			wantPath: "exercises[1].payload.passage",
+			wantPath: "exercises[0].payload.passage",
 		},
 		{
 			name: "oversized passage rejected",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[1].Reading.Passage = strings.Repeat("あ", 6001)
+				l.Exercises[0].Reading.Passage = strings.Repeat("あ", 6001)
 			},
-			wantPath: "exercises[1].payload.passage",
+			wantPath: "exercises[0].payload.passage",
 		},
 		{
 			name: "japanese script required in cloze",
 			mutate: func(l *lesson.Lesson) {
-				l.Exercises[0].Cloze.Text = "I went to {{1}} with my {{2}}."
+				l.Exercises[1].Cloze.Text = "I went to {{1}} with my {{2}}."
 			},
-			wantPath: "exercises[0].payload.text",
+			wantPath: "exercises[1].payload.text",
 		},
 	}
 
@@ -306,7 +313,7 @@ func TestNewReportsAllIssuesAtOnce(t *testing.T) {
 	candidate := validLesson()
 	candidate.Title = ""
 	candidate.ID = "nope"
-	candidate.Exercises[0].Cloze.Blanks[0].Answer = ""
+	candidate.Exercises[1].Cloze.Blanks[0].Answer = ""
 	_, err := lesson.New(candidate)
 	if err == nil {
 		t.Fatal("New: error = nil")

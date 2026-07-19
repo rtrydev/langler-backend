@@ -139,17 +139,7 @@ func validLesson() domain.Lesson {
 		ReadingStage:  domain.StageConnected,
 		Exercises: []domain.Exercise{
 			{
-				ID:              "ex-1",
-				Type:            domain.TypeCloze,
-				Points:          8,
-				ReferencedVocab: []string{"N4#1416220"},
-				Cloze: &domain.Cloze{
-					Text:   "先週の{{1}}に行きました。",
-					Blanks: []domain.Blank{{Index: 1, Answer: "週末"}},
-				},
-			},
-			{
-				ID:   "ex-2",
+				ID:   "ex-1",
 				Type: domain.TypeReading,
 				Reading: &domain.Reading{
 					Genre:   domain.GenreShortStory,
@@ -158,6 +148,16 @@ func validLesson() domain.Lesson {
 					Questions: []domain.Question{
 						{Question: "どこへ行きましたか。", Kind: domain.KindShortAnswer, Answer: "京都"},
 					},
+				},
+			},
+			{
+				ID:              "ex-2",
+				Type:            domain.TypeCloze,
+				Points:          8,
+				ReferencedVocab: []string{"N4#1416220"},
+				Cloze: &domain.Cloze{
+					Text:   "先週の{{1}}に行きました。",
+					Blanks: []domain.Blank{{Index: 1, Answer: "週末"}},
 				},
 			},
 		},
@@ -232,7 +232,7 @@ func TestImportRejectsMissingReferenceIDs(t *testing.T) {
 	if len(validation.Issues) != 1 {
 		t.Fatalf("issues = %v, want 1", validation.Issues)
 	}
-	if validation.Issues[0].Path != "exercises[0].referencedVocab[0]" {
+	if validation.Issues[0].Path != "exercises[1].referencedVocab[0]" {
 		t.Errorf("path = %q", validation.Issues[0].Path)
 	}
 }
@@ -316,8 +316,8 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 		AutoScore:   8,
 		AutoMax:     8,
 		Exercises: []domain.ExerciseResult{
-			{ExerciseID: "ex-1", Type: domain.TypeCloze, Grading: "auto", Score: 8, MaxScore: 8, Correct: 1, Total: 1},
-			{ExerciseID: "ex-2", Type: domain.TypeReading, Grading: "auto", Score: 0, MaxScore: 0, Correct: 1, Total: 1},
+			{ExerciseID: "ex-1", Type: domain.TypeReading, Grading: "auto", Score: 0, MaxScore: 0, Correct: 1, Total: 1},
+			{ExerciseID: "ex-2", Type: domain.TypeCloze, Grading: "auto", Score: 8, MaxScore: 8, Correct: 1, Total: 1},
 		},
 	}
 
