@@ -26,32 +26,34 @@ func (e *exampleItem) toDomain() *domain.Example {
 }
 
 type vocabItem struct {
-	SK       string       `dynamodbav:"SK"`
-	Headword string       `dynamodbav:"headword"`
-	Reading  string       `dynamodbav:"reading"`
-	Gloss    []string     `dynamodbav:"gloss"`
-	Pos      []string     `dynamodbav:"pos"`
-	Level    string       `dynamodbav:"level"`
-	FreqBand int          `dynamodbav:"freqBand"`
-	Topics   []string     `dynamodbav:"topics"`
-	Example  *exampleItem `dynamodbav:"example"`
-	SourceID string       `dynamodbav:"sourceId"`
-	License  string       `dynamodbav:"license"`
+	SK               string       `dynamodbav:"SK"`
+	Headword         string       `dynamodbav:"headword"`
+	Reading          string       `dynamodbav:"reading"`
+	Gloss            []string     `dynamodbav:"gloss"`
+	Pos              []string     `dynamodbav:"pos"`
+	Level            string       `dynamodbav:"level"`
+	LevelApproximate bool         `dynamodbav:"levelApproximate"`
+	FreqBand         int          `dynamodbav:"freqBand"`
+	Topics           []string     `dynamodbav:"topics"`
+	Example          *exampleItem `dynamodbav:"example"`
+	SourceID         string       `dynamodbav:"sourceId"`
+	License          string       `dynamodbav:"license"`
 }
 
 func (v vocabItem) toDomain() domain.VocabEntry {
 	return domain.VocabEntry{
-		ID:            strings.TrimPrefix(v.SK, "VOCAB#"),
-		Headword:      v.Headword,
-		Reading:       v.Reading,
-		Gloss:         v.Gloss,
-		PartsOfSpeech: v.Pos,
-		Level:         domain.Level(v.Level),
-		FreqBand:      v.FreqBand,
-		Topics:        v.Topics,
-		Example:       v.Example.toDomain(),
-		SourceID:      v.SourceID,
-		License:       v.License,
+		ID:               strings.TrimPrefix(v.SK, "VOCAB#"),
+		Headword:         v.Headword,
+		Reading:          v.Reading,
+		Gloss:            v.Gloss,
+		PartsOfSpeech:    v.Pos,
+		Level:            domain.Level(v.Level),
+		LevelApproximate: v.LevelApproximate,
+		FreqBand:         v.FreqBand,
+		Topics:           v.Topics,
+		Example:          v.Example.toDomain(),
+		SourceID:         v.SourceID,
+		License:          v.License,
 	}
 }
 

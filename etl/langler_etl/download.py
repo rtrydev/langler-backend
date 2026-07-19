@@ -2,8 +2,10 @@ import gzip
 import io
 import json
 import re
+import tarfile
 import urllib.request
 import zipfile
+import bz2
 from pathlib import Path
 
 from .sources import SOURCES, Source
@@ -42,6 +44,76 @@ def download_all(data_dir: Path) -> dict:
 
     resolved_path.write_text(json.dumps(resolved, indent=2) + "\n")
     return resolved
+
+
+def download_polish(data_dir: Path) -> dict:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    resolved_path = data_dir / "resolved-pl.json"
+    resolved = json.loads(resolved_path.read_text()) if resolved_path.exists() else {}
+    _download_nkjp_frequency(data_dir, resolved)
+    target = data_dir / "kaikki-pl.jsonl"
+    if not _skip(target):
+        url = SOURCES["kaikki-pl"].url
+        print(f"downloading {url}")
+        target.write_bytes(gzip.decompress(fetch(url)))
+        resolved["kaikki-pl"] = url
+
+    sentences = data_dir / "tatoeba-sentences.tsv"
+    if not _skip(sentences):
+        url = "https://downloads.tatoeba.org/exports/per_language/pol/pol_sentences.tsv.bz2"
+        print(f"downloading {url}")
+        sentences.write_bytes(bz2.decompress(fetch(url)))
+        resolved["tatoeba-pl-sentences"] = url
+
+    english = data_dir / "tatoeba-english.tsv"
+    if not _skip(english):
+        url = "https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2"
+        print(f"downloading {url}")
+        english.write_bytes(bz2.decompress(fetch(url)))
+        resolved["tatoeba-pl-english"] = url
+
+    links = data_dir / "tatoeba-links.tsv"
+    if not _skip(links):
+        url = "https://downloads.tatoeba.org/exports/links.tar.bz2"
+        print(f"downloading {url}")
+        archive = tarfile.open(fileobj=io.BytesIO(fetch(url)), mode="r:bz2")
+        member = next(member for member in archive.getmembers() if member.name.endswith("links.csv"))
+        extracted = archive.extractfile(member)
+        if extracted is None:
+            raise LookupError(f"links.csv is missing from {url}")
+        links.write_bytes(extracted.read())
+        resolved["tatoeba-pl-links"] = url
+
+    resolved_path.write_text(json.dumps(resolved, indent=2) + "\n")
+    return resolved
+
+
+def _download_nkjp_frequency(data_dir: Path, resolved: dict) -> None:
+    target = data_dir / "nkjp-frequency.tsv"
+    if _skip(target):
+        return
+    archive = data_dir / "1grams.gz"
+    url = SOURCES["nkjp-frequency"].url
+    if not _skip(archive):
+        print(f"downloading {url}")
+        archive.write_bytes(fetch(url))
+    convert_nkjp_unigrams(archive, target)
+    resolved["nkjp-frequency"] = url
+
+
+def convert_nkjp_unigrams(source_path: Path, target_path: Path) -> None:
+    previous_count = None
+    with gzip.open(source_path, mode="rt", encoding="utf-8", errors="strict") as source:
+        with target_path.open("w", encoding="utf-8") as target:
+            for rank, line in enumerate(source, 1):
+                fields = line.rstrip().split(maxsplit=1)
+                if len(fields) != 2 or not fields[0].isdigit():
+                    raise ValueError(f"invalid NKJP unigram at line {rank}")
+                count = int(fields[0])
+                if previous_count is not None and count > previous_count:
+                    raise ValueError(f"NKJP unigrams are not frequency-sorted at line {rank}")
+                previous_count = count
+                target.write(f"{rank}\t{fields[1]}\t{count}\n")
 
 
 def _skip(target: Path) -> bool:

@@ -1,0 +1,11 @@
+[
+  {"pattern":"ą ę","name":"Nasal vowels ą and ę","description":"Use the Polish nasal vowel letters; their pronunciation changes before different consonants.","examples":["mąż, ręka, będę"],"contrasts":["a/ą","e/ę"]},
+  {"pattern":"ć ń ś ź","name":"Acute-mark consonants","description":"Ć, ń, ś, and ź mark soft consonants. Before another vowel the same sounds are commonly written ci, ni, si, and zi.","examples":["ćma, koń, śnieg, źle"],"contrasts":["c/ć","n/ń","s/ś","z/ź"]},
+  {"pattern":"ł","name":"The letter ł","description":"Ł is a separate Polish letter and must not be replaced by l.","examples":["był, łódź, szkoła"],"contrasts":["l/ł"]},
+  {"pattern":"ó / u","name":"Ó or u","description":"Ó and u normally represent the same sound. Word families and endings often reveal the conventional spelling.","examples":["król—królewski, stół—stoły, buty"],"contrasts":["ó/u"]},
+  {"pattern":"rz / ż","name":"Rz or ż","description":"Rz and ż usually represent the same sound. Alternations such as rz/r can help, but many words must be learned.","examples":["morze—morski, książka, rzeka"],"contrasts":["rz/ż"]},
+  {"pattern":"ch / h","name":"Ch or h","description":"Ch and h are pronounced alike by most speakers. Alternations such as ch/sz can help with some word families.","examples":["dach—daszek, herbata, historia"],"contrasts":["ch/h"]},
+  {"pattern":"cz sz dz dź dż","name":"Polish digraphs","description":"These letter groups represent single consonants; dź and dż differ in softness and articulation.","examples":["czas, szkoła, dzwon, dźwięk, dżem"],"contrasts":["cz/sz","dź/dż"]},
+  {"pattern":"i / j","name":"I and j around vowels","description":"I can mark consonant softness and a vowel, while j marks the glide in forms such as moje and kraj.","examples":["pies, Maria, moje, kraj"],"contrasts":["i/j"]},
+  {"pattern":"-ii / -ji / -i","name":"Foreign-noun endings","description":"Loanwords vary between -ii, -ji, and -i in inflected forms according to their stem and pronunciation.","examples":["historii, lekcji, geografii"],"contrasts":["ii/ji/i"]}
+]

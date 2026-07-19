@@ -4,7 +4,6 @@ from pathlib import Path
 
 MODEL_ID = "cohere.embed-multilingual-v3"
 BATCH_SIZE = 96
-INDEX_NAME = "ja-vocab.embed"
 
 
 def word_text(record: dict) -> str:
@@ -37,12 +36,12 @@ def read_index(path: Path) -> tuple[dict, bytes]:
     return header, raw[4 + header_len :]
 
 
-def embed_corpus(out_dir: Path, region: str, model_id: str = MODEL_ID) -> Path:
+def embed_corpus(out_dir: Path, region: str, model_id: str = MODEL_ID, language: str = "ja") -> Path:
     import boto3
 
     client = boto3.client("bedrock-runtime", region_name=region)
     records = []
-    with (out_dir / "reference" / "ja" / "vocab.jsonl").open(encoding="utf-8") as f:
+    with (out_dir / "reference" / language / "vocab.jsonl").open(encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 records.append(json.loads(line))
@@ -67,6 +66,6 @@ def embed_corpus(out_dir: Path, region: str, model_id: str = MODEL_ID) -> Path:
                 raise ValueError("embedding dimensions changed mid-corpus")
             vectors.append(quantize(vector))
 
-    path = out_dir / "embeddings" / INDEX_NAME
+    path = out_dir / "embeddings" / f"{language}-vocab.embed"
     write_index(path, model_id, dims or 0, ids, vectors)
     return path

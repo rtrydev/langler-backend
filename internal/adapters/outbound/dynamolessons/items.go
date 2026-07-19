@@ -142,9 +142,12 @@ type scriptPracticeItem struct {
 }
 
 type scriptGlyphItem struct {
-	Glyph   string `dynamodbav:"glyph"`
-	Reading string `dynamodbav:"reading,omitempty"`
-	Meaning string `dynamodbav:"meaning,omitempty"`
+	Glyph   string   `dynamodbav:"glyph,omitempty"`
+	Reading string   `dynamodbav:"reading,omitempty"`
+	Meaning string   `dynamodbav:"meaning,omitempty"`
+	Kind    string   `dynamodbav:"kind,omitempty"`
+	Answer  string   `dynamodbav:"answer,omitempty"`
+	Options []string `dynamodbav:"options,omitempty"`
 }
 
 func toItem(owner string, contentHash string, createdAt time.Time, l domain.Lesson) lessonItem {
@@ -230,7 +233,10 @@ func toExerciseItem(e domain.Exercise) exerciseItem {
 	if e.ScriptPractice != nil {
 		items := make([]scriptGlyphItem, 0, len(e.ScriptPractice.Items))
 		for _, glyph := range e.ScriptPractice.Items {
-			items = append(items, scriptGlyphItem(glyph))
+			items = append(items, scriptGlyphItem{
+				Glyph: glyph.Glyph, Reading: glyph.Reading, Meaning: glyph.Meaning,
+				Kind: glyph.Kind, Answer: glyph.Answer, Options: glyph.Options,
+			})
 		}
 		item.ScriptPractice = &scriptPracticeItem{Items: items}
 	}
@@ -317,7 +323,10 @@ func (item exerciseItem) toDomain() domain.Exercise {
 	if item.ScriptPractice != nil {
 		items := make([]domain.ScriptItem, 0, len(item.ScriptPractice.Items))
 		for _, glyph := range item.ScriptPractice.Items {
-			items = append(items, domain.ScriptItem(glyph))
+			items = append(items, domain.ScriptItem{
+				Glyph: glyph.Glyph, Reading: glyph.Reading, Meaning: glyph.Meaning,
+				Kind: glyph.Kind, Answer: glyph.Answer, Options: glyph.Options,
+			})
 		}
 		e.ScriptPractice = &domain.ScriptPractice{Items: items}
 	}

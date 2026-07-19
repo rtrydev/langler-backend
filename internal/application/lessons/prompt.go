@@ -393,6 +393,10 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 		fmt.Fprintf(&b, "- Work every target vocabulary and grammar item into the story in natural context and introduce as little language outside the reference list as possible.\n")
 		fmt.Fprintf(&b, "- Annotate every target vocabulary word in \"annotations\" with its reading and gloss so the learner can decode it on first contact.\n")
 		fmt.Fprintf(&b, "- Give the story a title and 2-4 multiple-choice comprehension questions answerable from the passage alone.\n\n")
+		if request.language == "pl" {
+			fmt.Fprintf(&b, "- Write idiomatic contemporary Polish, not sentence-by-sentence English calques. Keep function words and inflection natural while maximizing coverage by the supplied CEFR-banded vocabulary; treat the CEFR labels as frequency-based approximations.\n")
+			fmt.Fprintf(&b, "- Keep at least 85%% of content-word occurrences within the selected level or easier. A higher-level word is allowed only when the story cannot remain natural without it, and should be annotated.\n\n")
+		}
 		fmt.Fprintf(&b, "## Teaching flow\n")
 		fmt.Fprintf(&b, "This is the learner's first encounter with the material; the lesson teaches, it does not quiz prior knowledge.\n")
 		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching, multiple choice, and script practice before cloze, cloze before ordering, translation and writing last.\n")
@@ -453,11 +457,18 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	fmt.Fprintf(&b, "- multiple_choice: {\"questions\": [{\"question\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"answer\": \"<must exactly equal one option>\"}]} - 1-10 questions, each with 3-4 options and exactly one correct answer. Make distractors plausible: same word class and level, wrong in meaning or usage.\n")
 	fmt.Fprintf(&b, "- reading: {\"genre\": \"short_story\", \"title\": \"...\", \"passage\": \"...\", \"annotations\": [{\"surface\": \"...\", \"reading\": \"...\", \"gloss\": \"...\"}], \"questions\": [{\"question\": \"...\", \"kind\": \"multiple_choice\", \"options\": [\"...\"], \"answer\": \"<must equal one option>\"}]} - comprehension questions must use \"kind\": \"multiple_choice\" so the app can grade them; only use {\"kind\": \"short_answer\", \"answer\": \"...\", \"alternates\": [\"...\"]} when a question genuinely cannot be closed-form, and then list every accepted phrasing in alternates.\n")
 	fmt.Fprintf(&b, "- writing_prompt: put the writing task in the exercise's \"prompt\"; payload is optional: {\"guidance\": \"...\", \"modelAnswer\": \"...\"}\n")
-	fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n\n")
+	if request.language == "pl" {
+		fmt.Fprintf(&b, "- script_practice: Polish orthography only. Use choice items {\"kind\": \"choice\", \"glyph\": \"<sentence or cue with a blank>\", \"meaning\": \"<brief rule hint>\", \"options\": [\"<correct spelling>\", \"<plausible contrast>\"], \"answer\": \"<must exactly equal one option>\"} and dictation-style recall items {\"kind\": \"dictation\", \"glyph\": \"<definition or cloze cue; no audio>\", \"meaning\": \"<optional contrast hint>\", \"answer\": \"<correct Polish word>\"}. Exercise ó/u, rz/ż, ch/h, Polish diacritics, or digraphs; never use tracing or stroke-order tasks.\n\n")
+	} else {
+		fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n\n")
+	}
 	fmt.Fprintf(&b, "## Constraints\n")
 	fmt.Fprintf(&b, "- Plain text only in every string: no HTML, no markdown, no control characters.\n")
 	if request.language == "ja" {
 		fmt.Fprintf(&b, "- All Japanese content (cloze texts, reading passages, translation sources, ordering items, practice glyphs) must be written in Japanese script.\n")
+	}
+	if request.language == "pl" {
+		fmt.Fprintf(&b, "- Preserve Polish diacritics exactly (ą, ć, ę, ł, ń, ó, ś, ź, ż) in stories, answers, annotations, and spelling options.\n")
 	}
 	fmt.Fprintf(&b, "- Keep every referencedVocab/referencedGrammar id exactly as given in the reference data; omit the arrays when an exercise uses none.\n")
 	fmt.Fprintf(&b, "- The output must parse as strict JSON (double quotes, no trailing commas, no comments).\n")

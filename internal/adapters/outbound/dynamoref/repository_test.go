@@ -133,6 +133,27 @@ func seedReferenceData(t *testing.T, client *dynamodb.Client, table string) {
 			"sourceId":    "langler-curated", "license": "CC BY-SA 4.0",
 		},
 		{
+			"PK": "REF#pl", "SK": "GRAMMAR#A1#present", "lang": "pl",
+			"topicId": "present", "name": "Present", "level": "A1",
+			"description": "Present tense.",
+			"example":     map[string]any{"text": "Czytam.", "translation": "I read."},
+			"sourceId":    "certyfikat-polish", "license": "Official legal text",
+		},
+		{
+			"PK": "REF#pl", "SK": "GRAMMAR#A2#imperative", "lang": "pl",
+			"topicId": "imperative", "name": "Imperative", "level": "A2",
+			"description": "Imperative mood.",
+			"example":     map[string]any{"text": "Czytaj!", "translation": "Read!"},
+			"sourceId":    "certyfikat-polish", "license": "Official legal text",
+		},
+		{
+			"PK": "REF#pl", "SK": "GRAMMAR#B1#relative", "lang": "pl",
+			"topicId": "relative", "name": "Relative", "level": "B1",
+			"description": "Relative clauses.",
+			"example":     map[string]any{"text": "Książka, którą czytam.", "translation": "The book I read."},
+			"sourceId":    "certyfikat-polish", "license": "Official legal text",
+		},
+		{
 			"PK": "REF#ja", "SK": "SCRIPT#KANA#H001", "lang": "ja",
 			"glyph": "あ", "scriptType": "kana", "name": "hiragana a",
 			"readings": map[string][]string{"romaji": {"a"}}, "kanaScript": "hiragana",
@@ -273,6 +294,14 @@ func TestGrammarQueries(t *testing.T) {
 	}
 	if topic.Example == nil || topic.Example.Translation != "I am a student." {
 		t.Errorf("example = %+v, want the seeded example", topic.Example)
+	}
+
+	polish, err := repo.Grammar(context.Background(), outbound.GrammarFilter{Language: "pl", Level: "A2", Limit: 10})
+	if err != nil {
+		t.Fatalf("Polish Grammar: %v", err)
+	}
+	if len(polish.Topics) != 2 || polish.Topics[0].Level != "A2" || polish.Topics[1].Level != "A1" {
+		t.Fatalf("Polish topics = %+v, want target-first cumulative A2 and A1 topics", polish.Topics)
 	}
 }
 

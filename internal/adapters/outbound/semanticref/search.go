@@ -28,14 +28,13 @@ const (
 var ErrNotConfigured = errors.New("semantic vocab search is not configured")
 
 type Search struct {
-	bedrock  *bedrockruntime.Client
-	http     *http.Client
-	language domain.Language
-	indexURL string
-	modelID  string
+	bedrock   *bedrockruntime.Client
+	http      *http.Client
+	indexURLs map[domain.Language]string
+	modelID   string
 
-	mu    sync.Mutex
-	index *vectorIndex
+	mu      sync.Mutex
+	indexes map[domain.Language]*vectorIndex
 }
 
 type vectorIndex struct {
@@ -44,24 +43,29 @@ type vectorIndex struct {
 	vecs []int8
 }
 
-func New(bedrock *bedrockruntime.Client, language domain.Language, indexURL, modelID string) (*Search, error) {
+func New(bedrock *bedrockruntime.Client, indexURLs map[domain.Language]string, modelID string) (*Search, error) {
 	if bedrock == nil {
 		return nil, errors.New("bedrock client must not be nil")
 	}
+	configured := make(map[domain.Language]string, len(indexURLs))
+	for language, indexURL := range indexURLs {
+		configured[language] = indexURL
+	}
 	return &Search{
-		bedrock:  bedrock,
-		http:     &http.Client{Timeout: 10 * time.Second},
-		language: language,
-		indexURL: indexURL,
-		modelID:  modelID,
+		bedrock:   bedrock,
+		http:      &http.Client{Timeout: 10 * time.Second},
+		indexURLs: configured,
+		modelID:   modelID,
+		indexes:   make(map[domain.Language]*vectorIndex),
 	}, nil
 }
 
 func (s *Search) SimilarVocabIDs(ctx context.Context, language domain.Language, level domain.Level, topic string, limit int) ([]string, error) {
-	if s.indexURL == "" || s.modelID == "" || language != s.language {
+	indexURL := s.indexURLs[language]
+	if indexURL == "" || s.modelID == "" {
 		return nil, ErrNotConfigured
 	}
-	index, err := s.loadIndex(ctx)
+	index, err := s.loadIndex(ctx, language, indexURL)
 	if err != nil {
 		return nil, err
 	}
@@ -103,14 +107,14 @@ func (s *Search) SimilarVocabIDs(ctx context.Context, language domain.Language, 
 	return ids, nil
 }
 
-func (s *Search) loadIndex(ctx context.Context) (*vectorIndex, error) {
+func (s *Search) loadIndex(ctx context.Context, language domain.Language, indexURL string) (*vectorIndex, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.index != nil {
-		return s.index, nil
+	if index := s.indexes[language]; index != nil {
+		return index, nil
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.indexURL, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build index request: %w", err)
 	}
@@ -131,7 +135,7 @@ func (s *Search) loadIndex(ctx context.Context) (*vectorIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.index = index
+	s.indexes[language] = index
 	return index, nil
 }
 

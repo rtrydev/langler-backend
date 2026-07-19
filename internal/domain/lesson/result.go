@@ -127,7 +127,16 @@ func resultScale(exercise Exercise) (string, int) {
 			}
 		}
 		return gradingAuto, total
-	case TypeTranslation, TypeWritingPrompt, TypeScriptPractice:
+	case TypeScriptPractice:
+		if exercise.ScriptPractice != nil {
+			for _, item := range exercise.ScriptPractice.Items {
+				if item.Kind != "" {
+					return gradingAuto, len(exercise.ScriptPractice.Items)
+				}
+			}
+		}
+		return gradingSelf, 4
+	case TypeTranslation, TypeWritingPrompt:
 		return gradingSelf, 4
 	default:
 		return "", 0

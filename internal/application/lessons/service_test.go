@@ -470,6 +470,35 @@ func TestBuildFoundationalPromptOmitsStory(t *testing.T) {
 	}
 }
 
+func TestBuildPolishPromptIncludesStoryCoverageAndOrthography(t *testing.T) {
+	t.Parallel()
+
+	svc := newService(t, &fakeStore{}, &fakeChecker{}, &fakeReader{})
+	result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+		Language:      "pl",
+		Level:         "B1",
+		ExerciseTypes: []string{"script_practice"},
+		ReadingStage:  "connected",
+		Length:        "standard",
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, expected := range []string{
+		"Language: Polish (pl)",
+		"Level: CEFR B1",
+		"idiomatic contemporary Polish",
+		"85% of content-word occurrences",
+		"\"kind\": \"choice\"",
+		"ó/u, rz/ż, ch/h",
+		"Preserve Polish diacritics exactly",
+	} {
+		if !strings.Contains(result.Prompt, expected) {
+			t.Errorf("prompt missing %q", expected)
+		}
+	}
+}
+
 func TestBuildRejectsUnknownParameters(t *testing.T) {
 	t.Parallel()
 

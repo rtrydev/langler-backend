@@ -68,17 +68,18 @@ type Example struct {
 }
 
 type VocabEntry struct {
-	ID            string
-	Headword      string
-	Reading       string
-	Gloss         []string
-	PartsOfSpeech []string
-	Level         Level
-	FreqBand      int
-	Topics        []string
-	Example       *Example
-	SourceID      string
-	License       string
+	ID               string
+	Headword         string
+	Reading          string
+	Gloss            []string
+	PartsOfSpeech    []string
+	Level            Level
+	LevelApproximate bool
+	FreqBand         int
+	Topics           []string
+	Example          *Example
+	SourceID         string
+	License          string
 }
 
 type Topic struct {

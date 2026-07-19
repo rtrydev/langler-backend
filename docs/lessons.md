@@ -45,7 +45,7 @@ tolerated and ignored). Payload shapes by type:
 | `multiple_choice` | `{"questions": [{"question", "options": ["…"], "answer"}]}` — 1–10 questions, 2–6 options each, `answer` must exactly equal one option; auto-graded |
 | `reading` | `{"genre": "short_story", "title", "passage", "annotations"?: [{"surface", "reading"?, "gloss"?}], "questions": [{"question", "kind": "multiple_choice"\|"short_answer", "options"?, "answer"?, "alternates"?}]}` — `alternates` (short-answer only) lists additional accepted answers |
 | `writing_prompt` | optional `{"guidance"?, "modelAnswer"?}`; the task lives in `prompt` |
-| `script_practice` | `{"items": [{"glyph", "reading"?, "meaning"?}]}` |
+| `script_practice` | Japanese/Burmese glyphs: `{"items": [{"glyph", "reading"?, "meaning"?}]}`. Polish orthography: `{"items": [{"kind": "choice", "glyph"?: cue, "meaning"?: rule hint, "options": [spellings], "answer": correct spelling} | {"kind": "dictation", "glyph"?: text cue, "meaning"?: rule hint, "answer": correct word}]}`. Polish dictation-style items are text-only; audio is not used. |
 
 ## Validation layers
 
@@ -109,7 +109,7 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   a slug is resolved semantically first: the topic text is embedded with
   Bedrock (`EMBED_MODEL_ID`, cohere.embed-multilingual-v3 in prod — works for
   Japanese and Polish input too) and matched by cosine similarity against the
-  precomputed vocabulary embedding index (`EMBEDDINGS_URL`, built by
+  language's precomputed vocabulary embedding index (`EMBEDDINGS_URLS`, built by
   `langler-etl embed` and served from the reference-assets CDN). If Bedrock or
   the index is unavailable it falls back to keyword matching against the
   curated topics' `keywords` (top two matches), then to the plain level slice.

@@ -2,6 +2,8 @@ package semanticref_test
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/semanticref"
@@ -19,8 +23,46 @@ import (
 func TestNewRejectsNilClient(t *testing.T) {
 	t.Parallel()
 
-	if _, err := semanticref.New(nil, "ja", "http://example.com/index", "model"); err == nil {
+	if _, err := semanticref.New(nil, map[domain.Language]string{"ja": "http://example.com/index"}, "model"); err == nil {
 		t.Fatal("New(nil client) error = nil")
+	}
+}
+
+func TestSimilarVocabIDsUsesLanguageIndex(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/ja.embed":
+			_, _ = w.Write(indexBytes("N5#ja-word"))
+		case "/pl.embed":
+			_, _ = w.Write(indexBytes("A1#pl-word"))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"embeddings":[[1,0]]}`))
+		}
+	}))
+	defer server.Close()
+
+	client := bedrockruntime.New(bedrockruntime.Options{
+		BaseEndpoint: aws.String(server.URL),
+		Credentials:  credentials.NewStaticCredentialsProvider("test", "test", ""),
+		Region:       "eu-central-1",
+	})
+	search, err := semanticref.New(client, map[domain.Language]string{
+		"ja": server.URL + "/ja.embed",
+		"pl": server.URL + "/pl.embed",
+	}, "test-model")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	ids, err := search.SimilarVocabIDs(context.Background(), "pl", "A1", "weekend in Kraków", 10)
+	if err != nil {
+		t.Fatalf("SimilarVocabIDs: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "A1#pl-word" {
+		t.Fatalf("ids = %v", ids)
 	}
 }
 
@@ -42,7 +84,7 @@ func TestSimilarVocabIDsRequiresConfiguration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			search, err := semanticref.New(client, "ja", tt.indexURL, tt.modelID)
+			search, err := semanticref.New(client, map[domain.Language]string{"ja": tt.indexURL}, tt.modelID)
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
@@ -72,7 +114,7 @@ func TestSimilarVocabIDsAgainstBedrockAndBuiltIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aws config: %v", err)
 	}
-	search, err := semanticref.New(bedrockruntime.NewFromConfig(cfg), "ja", server.URL, "cohere.embed-multilingual-v3")
+	search, err := semanticref.New(bedrockruntime.NewFromConfig(cfg), map[domain.Language]string{"ja": server.URL}, "cohere.embed-multilingual-v3")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -92,4 +134,18 @@ func TestSimilarVocabIDsAgainstBedrockAndBuiltIndex(t *testing.T) {
 		}
 		t.Logf("%q -> %v", topic, ids)
 	}
+}
+
+func indexBytes(id string) []byte {
+	header, _ := json.Marshal(map[string]any{
+		"version": 1,
+		"dims":    2,
+		"count":   1,
+		"ids":     []string{id},
+	})
+	raw := make([]byte, 4+len(header)+2)
+	binary.BigEndian.PutUint32(raw[:4], uint32(len(header)))
+	copy(raw[4:], header)
+	raw[len(raw)-2] = 127
+	return raw
 }

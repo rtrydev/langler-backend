@@ -65,6 +65,16 @@ func (r *Repository) Vocab(ctx context.Context, filter outbound.VocabFilter) (ou
 }
 
 func (r *Repository) Grammar(ctx context.Context, filter outbound.GrammarFilter) (outbound.GrammarPage, error) {
+	if filter.Language == "pl" && filter.Level != "" {
+		start := "GRAMMAR#A1#"
+		end := "GRAMMAR#" + string(filter.Level) + "#\uffff"
+		page, err := r.queryRange(ctx, filter.Language, start, end, filter.Limit, filter.Cursor)
+		if err != nil {
+			return outbound.GrammarPage{}, err
+		}
+		return grammarPage(page)
+	}
+
 	prefix := "GRAMMAR#"
 	if filter.Level != "" {
 		prefix += string(filter.Level) + "#"
@@ -75,6 +85,10 @@ func (r *Repository) Grammar(ctx context.Context, filter outbound.GrammarFilter)
 		return outbound.GrammarPage{}, err
 	}
 
+	return grammarPage(page)
+}
+
+func grammarPage(page rawPage) (outbound.GrammarPage, error) {
 	var items []grammarItem
 	if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
 		return outbound.GrammarPage{}, fmt.Errorf("%w: unmarshal grammar items: %v", domain.ErrStorageFailure, err)
@@ -236,6 +250,45 @@ func (r *Repository) query(
 	return rawPage{items: out.Items, nextCursor: nextCursor}, nil
 }
 
+func (r *Repository) queryRange(
+	ctx context.Context,
+	lang domain.Language,
+	start string,
+	end string,
+	limit int,
+	cursor string,
+) (rawPage, error) {
+	partition := "REF#" + string(lang)
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(r.table),
+		KeyConditionExpression: aws.String("PK = :pk AND SK BETWEEN :start AND :end"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":    &types.AttributeValueMemberS{Value: partition},
+			":start": &types.AttributeValueMemberS{Value: start},
+			":end":   &types.AttributeValueMemberS{Value: end},
+		},
+		Limit:            aws.Int32(int32(limit)),
+		ScanIndexForward: aws.Bool(false),
+	}
+	if cursor != "" {
+		startKey, err := decodeRangeCursor(cursor, partition, start, end)
+		if err != nil {
+			return rawPage{}, err
+		}
+		input.ExclusiveStartKey = startKey
+	}
+
+	out, err := r.client.Query(ctx, input)
+	if err != nil {
+		return rawPage{}, fmt.Errorf("%w: query %s through %s: %v", domain.ErrStorageFailure, start, end, err)
+	}
+	nextCursor, err := encodeCursor(out.LastEvaluatedKey)
+	if err != nil {
+		return rawPage{}, err
+	}
+	return rawPage{items: out.Items, nextCursor: nextCursor}, nil
+}
+
 type cursorKey struct {
 	PK string `json:"pk"`
 	SK string `json:"sk"`
@@ -273,4 +326,16 @@ func decodeCursor(cursor, partition, skPrefix string) (map[string]types.Attribut
 		"PK": &types.AttributeValueMemberS{Value: key.PK},
 		"SK": &types.AttributeValueMemberS{Value: key.SK},
 	}, nil
+}
+
+func decodeRangeCursor(cursor, partition, start, end string) (map[string]types.AttributeValue, error) {
+	key, err := decodeCursor(cursor, partition, "GRAMMAR#")
+	if err != nil {
+		return nil, err
+	}
+	sk := key["SK"].(*types.AttributeValueMemberS).Value
+	if sk < start || sk > end {
+		return nil, fmt.Errorf("%w: cursor does not match the query", domain.ErrInvalidCursor)
+	}
+	return key, nil
 }

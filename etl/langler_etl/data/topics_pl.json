@@ -1,0 +1,13 @@
+{
+  "topics": [
+    {"slug":"everyday-life","name":"Everyday life","description":"Common routines, objects, and actions.","keywords":["day","time","thing","do","make","go","come","home","work","use"]},
+    {"slug":"people-family","name":"People & family","description":"People, relationships, and family life.","keywords":["person","people","woman","man","child","family","mother","father","friend"]},
+    {"slug":"food-drink","name":"Food & drink","description":"Meals, ingredients, and eating out.","keywords":["food","drink","eat","meal","bread","water","fruit","restaurant","cook"]},
+    {"slug":"travel-places","name":"Travel & places","description":"Transport, directions, and places.","keywords":["travel","place","city","country","road","train","bus","station","street"]},
+    {"slug":"home","name":"Home","description":"Rooms, furniture, and household activities.","keywords":["home","house","room","door","window","table","bed","kitchen"]},
+    {"slug":"study-work","name":"Study & work","description":"School, learning, professions, and the workplace.","keywords":["school","learn","study","student","teacher","work","job","office","write","read"]},
+    {"slug":"health-body","name":"Health & body","description":"The body, wellbeing, and medical needs.","keywords":["body","health","doctor","pain","ill","hand","head","eye","hospital"]},
+    {"slug":"nature-weather","name":"Nature & weather","description":"Weather, seasons, animals, and the natural world.","keywords":["weather","rain","snow","sun","tree","animal","river","sea","wind"]},
+    {"slug":"society-culture","name":"Society & culture","description":"Public life, media, arts, and shared culture.","keywords":["society","law","government","art","music","book","film","news","history"]}
+  ]
+}

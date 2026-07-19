@@ -133,6 +133,9 @@ type ScriptItem struct {
 	Glyph   string
 	Reading string
 	Meaning string
+	Kind    string
+	Answer  string
+	Options []string
 }
 
 const (
@@ -165,6 +168,12 @@ const (
 	maxModelAnswerLen   = 2000
 	maxScriptItems      = 30
 	maxGlyphLen         = 8
+	maxOrthographyLen   = 120
+)
+
+const (
+	ScriptKindChoice    = "choice"
+	ScriptKindDictation = "dictation"
 )
 
 var (
@@ -483,7 +492,43 @@ func validateScriptPractice(c *collector, path string, p *ScriptPractice) {
 		item := &p.Items[i]
 		itemPath := fmt.Sprintf("%s.items[%d]", path, i)
 		item.Glyph = strings.TrimSpace(item.Glyph)
-		c.text(itemPath+".glyph", item.Glyph, maxGlyphLen, true)
+		item.Kind = strings.TrimSpace(item.Kind)
+		item.Answer = strings.TrimSpace(item.Answer)
+		if item.Kind == "" {
+			c.text(itemPath+".glyph", item.Glyph, maxGlyphLen, true)
+			if item.Answer != "" || len(item.Options) > 0 {
+				c.add(itemPath, "answer and options require kind %q or %q", ScriptKindChoice, ScriptKindDictation)
+			}
+		} else {
+			c.text(itemPath+".glyph", item.Glyph, maxOrthographyLen, false)
+			c.text(itemPath+".answer", item.Answer, maxOrthographyLen, true)
+			switch item.Kind {
+			case ScriptKindChoice:
+				if len(item.Options) < 2 || len(item.Options) > maxOptions {
+					c.add(itemPath+".options", "must contain 2-%d spellings for a %q item", maxOptions, ScriptKindChoice)
+				}
+				answerFound := false
+				seenOptions := map[string]bool{}
+				for j := range item.Options {
+					item.Options[j] = strings.TrimSpace(item.Options[j])
+					c.text(fmt.Sprintf("%s.options[%d]", itemPath, j), item.Options[j], maxOrthographyLen, true)
+					answerFound = answerFound || item.Options[j] == item.Answer
+					if seenOptions[item.Options[j]] {
+						c.add(fmt.Sprintf("%s.options[%d]", itemPath, j), "duplicates spelling %q", item.Options[j])
+					}
+					seenOptions[item.Options[j]] = true
+				}
+				if !answerFound {
+					c.add(itemPath+".answer", "must exactly equal one of options")
+				}
+			case ScriptKindDictation:
+				if len(item.Options) > 0 {
+					c.add(itemPath+".options", "must be omitted for a %q item", ScriptKindDictation)
+				}
+			default:
+				c.add(itemPath+".kind", "must be %q or %q", ScriptKindChoice, ScriptKindDictation)
+			}
+		}
 		c.text(itemPath+".reading", item.Reading, maxAnswerLen, false)
 		c.text(itemPath+".meaning", item.Meaning, maxAnswerLen, false)
 	}
