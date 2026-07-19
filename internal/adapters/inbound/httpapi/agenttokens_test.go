@@ -51,7 +51,7 @@ func tokenRequest(method, path, owner, body string) events.APIGatewayV2HTTPReque
 
 func tokenHandler(t *testing.T, manager *fakeAgentTokenManager) *httpapi.Handler {
 	t.Helper()
-	handler, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, manager)
+	handler, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, manager, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

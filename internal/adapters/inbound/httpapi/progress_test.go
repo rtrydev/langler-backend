@@ -13,7 +13,7 @@ func newProgressHandler(t *testing.T, provider *fakeProgressProvider) *httpapi.H
 	t.Helper()
 	handler, err := httpapi.NewHandler(
 		fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{},
-		&fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, provider, &fakeAgentTokenManager{},
+		&fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, provider, &fakeAgentTokenManager{}, &fakeAssessmentProvider{},
 	)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)

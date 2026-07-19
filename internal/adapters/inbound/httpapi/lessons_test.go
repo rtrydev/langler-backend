@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestHandleLessonResult(t *testing.T) {
 		Score:       8,
 		MaxScore:    8,
 	}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

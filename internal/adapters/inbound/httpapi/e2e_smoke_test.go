@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,9 +16,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoassessments"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
+	"github.com/rtrydev/langler-backend/internal/application/assessments"
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
 	progressapp "github.com/rtrydev/langler-backend/internal/application/progress"
 	appref "github.com/rtrydev/langler-backend/internal/application/reference"
@@ -64,7 +67,15 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{})
+	assessmentRepo, err := dynamoassessments.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("dynamoassessments.NewRepository: %v", err)
+	}
+	assessmentSvc, err := assessments.NewService(assessmentRepo, repo)
+	if err != nil {
+		t.Fatalf("assessments.NewService: %v", err)
+	}
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{}, assessmentSvc)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -316,5 +327,81 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	}
 	if statusCode, _ = send(http.MethodGet, "/lessons/"+lessonID, "e2e-user", nil); statusCode != http.StatusNotFound {
 		t.Fatalf("get after delete: status %d, want 404", statusCode)
+	}
+
+	answerStage := func(owner, assessmentID string, view map[string]any, correctly bool) map[string]any {
+		t.Helper()
+		stage := view["stage"].(map[string]any)
+		stageIndex := int(stage["index"].(float64))
+		items := stage["items"].([]any)
+		stored, err := assessmentRepo.Get(ctx, owner, assessmentID)
+		if err != nil {
+			t.Fatalf("assessment get: %v", err)
+		}
+		answers := make([]int, len(items))
+		for i := range items {
+			correct := stored.Stages[stageIndex].Items[i].CorrectIndex
+			if correctly {
+				answers[i] = correct
+			} else {
+				answers[i] = (correct + 1) % len(stored.Stages[stageIndex].Items[i].Options)
+			}
+		}
+		statusCode, next := send(http.MethodPost, "/assessments/"+assessmentID+"/answers", owner, map[string]any{
+			"stageIndex": stageIndex,
+			"answers":    answers,
+		})
+		if statusCode != http.StatusOK {
+			t.Fatalf("answer stage %d: status %d body %v", stageIndex, statusCode, next)
+		}
+		return next
+	}
+
+	assessOwner := fmt.Sprintf("e2e-assess-user-%d", time.Now().UnixNano())
+	statusCode, started := send(http.MethodPost, "/assessments", assessOwner, map[string]any{"language": "ja"})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("assessment start: status %d body %v", statusCode, started)
+	}
+	if strings.Contains(fmt.Sprint(started), "correctIndex") {
+		t.Fatal("assessment view leaks correct answers")
+	}
+	assessmentID := started["assessmentId"].(string)
+	view := started
+	for view["status"] == "in_progress" {
+		view = answerStage(assessOwner, assessmentID, view, true)
+	}
+	result := view["result"].(map[string]any)
+	if result["estimatedLevel"] != "N1" {
+		t.Fatalf("all-correct estimate = %v, want N1", result["estimatedLevel"])
+	}
+
+	statusCode, floorStarted := send(http.MethodPost, "/assessments", assessOwner, map[string]any{"language": "ja"})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("second assessment start: status %d", statusCode)
+	}
+	floorView := answerStage(assessOwner, floorStarted["assessmentId"].(string), floorStarted, false)
+	if floorView["status"] != "completed" {
+		t.Fatalf("all-wrong session status = %v, want completed", floorView["status"])
+	}
+	floorResult := floorView["result"].(map[string]any)
+	if floorResult["estimatedLevel"] != "N5" || floorResult["floor"] != true {
+		t.Fatalf("all-wrong result = %v", floorResult)
+	}
+
+	statusCode, levels := send(http.MethodGet, "/profile/levels", assessOwner, nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("profile levels: status %d", statusCode)
+	}
+	levelItems := levels["levels"].([]any)
+	if len(levelItems) != 1 {
+		t.Fatalf("profile levels = %v, want one ja entry", levels)
+	}
+	if entry := levelItems[0].(map[string]any); entry["language"] != "ja" || entry["level"] != "N5" {
+		t.Fatalf("profile level = %v, want latest assessment (N5)", entry)
+	}
+
+	statusCode, history := send(http.MethodGet, "/assessments", assessOwner, nil)
+	if statusCode != http.StatusOK || len(history["items"].([]any)) != 2 {
+		t.Fatalf("assessment history: status %d body %v", statusCode, history)
 	}
 }

@@ -143,7 +143,7 @@ func getRequest(path string, params map[string]string) events.APIGatewayV2HTTPRe
 func newHandler(t *testing.T, status fakeStatusProvider, reference *fakeReferenceProvider) *httpapi.Handler {
 	t.Helper()
 
-	h, err := httpapi.NewHandler(status, reference, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{})
+	h, err := httpapi.NewHandler(status, reference, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -252,28 +252,32 @@ func TestNewHandlerRejectsNilDependencies(t *testing.T) {
 	results := &fakeLessonResultRecorder{}
 	progressProvider := &fakeProgressProvider{}
 	tokens := &fakeAgentTokenManager{}
-	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}, importer, library, prompts, results, progressProvider, tokens); err == nil {
+	assessments := &fakeAssessmentProvider{}
+	if _, err := httpapi.NewHandler(nil, &fakeReferenceProvider{}, importer, library, prompts, results, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil status) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil, importer, library, prompts, results, progressProvider, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, nil, importer, library, prompts, results, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil reference) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, nil, library, prompts, results, progressProvider, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, nil, library, prompts, results, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil importer) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, nil, prompts, results, progressProvider, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, nil, prompts, results, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil library) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, nil, results, progressProvider, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, nil, results, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil prompts) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, nil, progressProvider, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, nil, progressProvider, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil results) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, results, nil, tokens); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, results, nil, tokens, assessments); err == nil {
 		t.Fatal("NewHandler(nil progress) error = nil")
 	}
-	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, results, progressProvider, nil); err == nil {
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, results, progressProvider, nil, assessments); err == nil {
 		t.Fatal("NewHandler(nil tokens) error = nil")
+	}
+	if _, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, results, progressProvider, tokens, nil); err == nil {
+		t.Fatal("NewHandler(nil assessments) error = nil")
 	}
 }

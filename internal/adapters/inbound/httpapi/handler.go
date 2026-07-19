@@ -14,14 +14,15 @@ import (
 )
 
 type Handler struct {
-	status    inbound.StatusProvider
-	reference inbound.ReferenceProvider
-	importer  inbound.LessonImporter
-	library   inbound.LessonLibrary
-	prompts   inbound.LessonPromptBuilder
-	results   inbound.LessonResultRecorder
-	progress  inbound.ProgressProvider
-	tokens    inbound.AgentTokenManager
+	status      inbound.StatusProvider
+	reference   inbound.ReferenceProvider
+	importer    inbound.LessonImporter
+	library     inbound.LessonLibrary
+	prompts     inbound.LessonPromptBuilder
+	results     inbound.LessonResultRecorder
+	progress    inbound.ProgressProvider
+	tokens      inbound.AgentTokenManager
+	assessments inbound.AssessmentProvider
 }
 
 func NewHandler(
@@ -33,6 +34,7 @@ func NewHandler(
 	results inbound.LessonResultRecorder,
 	progress inbound.ProgressProvider,
 	tokens inbound.AgentTokenManager,
+	assessments inbound.AssessmentProvider,
 ) (*Handler, error) {
 	if status == nil {
 		return nil, errors.New("status provider must not be nil")
@@ -58,7 +60,10 @@ func NewHandler(
 	if tokens == nil {
 		return nil, errors.New("agent token manager must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, progress: progress, tokens: tokens}, nil
+	if assessments == nil {
+		return nil, errors.New("assessment provider must not be nil")
+	}
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, progress: progress, tokens: tokens, assessments: assessments}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -93,6 +98,17 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleReviewGrade(ctx, req), nil
 	case method == http.MethodGet && path == "/progress":
 		return h.handleProgressSummary(ctx, req), nil
+	case method == http.MethodPost && path == "/assessments":
+		return h.handleAssessmentStart(ctx, req), nil
+	case method == http.MethodGet && path == "/assessments":
+		return h.handleAssessmentList(ctx, req), nil
+	case method == http.MethodPost && strings.HasPrefix(path, "/assessments/") && strings.HasSuffix(path, "/answers"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/assessments/"), "/answers")
+		return h.handleAssessmentAnswer(ctx, req, id), nil
+	case method == http.MethodGet && strings.HasPrefix(path, "/assessments/"):
+		return h.handleAssessmentGet(ctx, req, strings.TrimPrefix(path, "/assessments/")), nil
+	case method == http.MethodGet && path == "/profile/levels":
+		return h.handleProfileLevels(ctx, req), nil
 	case method == http.MethodPost && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/lessons/"), "/results")
 		return h.handleLessonResult(ctx, req, id), nil
