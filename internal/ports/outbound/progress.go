@@ -32,6 +32,10 @@ type ProgressSnapshot struct {
 	ReviewActivity []progress.ReviewActivity
 }
 
+type CoverageReader interface {
+	CoveredItemIDs(ctx context.Context, owner, language string, kind progress.ItemKind) ([]string, error)
+}
+
 type ProgressStore interface {
 	GetItems(ctx context.Context, owner, language string, keys []string) (map[string]progress.Item, error)
 	SaveLesson(ctx context.Context, owner string, items []progress.Item, activity progress.LessonActivity) error

@@ -3,12 +3,12 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-from . import examples, grammar, jlpt, jmdict, kana, kanjidic, kradfile
+from . import examples, grammar, jlpt, jmdict, kana, kanjidic, kradfile, topics
 from .kanjidic import Kanji
 from .sources import REGISTRY, SOURCES
 
 
-def build(data_dir: Path, out_dir: Path, band=jmdict.freq_band) -> dict:
+def build(data_dir: Path, out_dir: Path, band=jmdict.freq_band, topic_data=None) -> dict:
     ref_dir = out_dir / "reference" / "ja"
     assets_dir = out_dir / "assets" / "kanjivg"
     ref_dir.mkdir(parents=True, exist_ok=True)
@@ -17,6 +17,11 @@ def build(data_dir: Path, out_dir: Path, band=jmdict.freq_band) -> dict:
     levels = jlpt.load_levels(data_dir / "jlpt")
     index = examples.ExampleIndex.from_file(data_dir / "examples.utf")
     vocab = jmdict.build_vocab(jmdict.load_words(data_dir / "jmdict-eng.json"), levels, index, band=band)
+
+    if topic_data is None:
+        topic_data = topics.load_topics()
+    topics.apply_topics(vocab, topic_data)
+    topic_items = topics.topic_records(vocab, topic_data)
 
     svg_dir = data_dir / "kanjivg"
     components = kradfile.parse_kradfile(data_dir / "kradfile.txt")
@@ -31,13 +36,14 @@ def build(data_dir: Path, out_dir: Path, band=jmdict.freq_band) -> dict:
     _write_jsonl(ref_dir / "vocab.jsonl", vocab)
     _write_jsonl(ref_dir / "grammar.jsonl", grammar_items)
     _write_jsonl(ref_dir / "scripts.jsonl", kana_items + kanji)
+    _write_jsonl(ref_dir / "topics.jsonl", topic_items)
 
     for item in kanji:
         if "strokeDataRef" in item:
             name = item["strokeDataRef"].removeprefix("kanjivg/")
             shutil.copyfile(svg_dir / name, assets_dir / name)
 
-    manifest = _manifest(vocab, grammar_items, kana_items, kanji, data_dir)
+    manifest = _manifest(vocab, grammar_items, kana_items, kanji, topic_items, data_dir)
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -81,7 +87,7 @@ def _write_jsonl(path: Path, items: list[dict]) -> None:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-def _manifest(vocab, grammar_items, kana_items, kanji, data_dir: Path) -> dict:
+def _manifest(vocab, grammar_items, kana_items, kanji, topic_items, data_dir: Path) -> dict:
     resolved_path = data_dir / "resolved.json"
     resolved = json.loads(resolved_path.read_text()) if resolved_path.exists() else {}
     sources = []
@@ -101,6 +107,7 @@ def _manifest(vocab, grammar_items, kana_items, kanji, data_dir: Path) -> dict:
             "grammar": _level_counts(grammar_items),
             "kanji": _level_counts(kanji),
             "kana": _kana_counts(kana_items),
+            "topics": _level_counts(topic_items),
         },
         "sources": sources,
     }

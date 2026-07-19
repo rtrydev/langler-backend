@@ -230,6 +230,38 @@ func (r *Repository) SaveReview(ctx context.Context, owner string, item domain.I
 	return nil
 }
 
+func (r *Repository) CoveredItemIDs(ctx context.Context, owner, language string, kind domain.ItemKind) ([]string, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(r.table),
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ProjectionExpression:   aws.String("itemId"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk": &types.AttributeValueMemberS{Value: "USER#" + owner},
+			":sk": &types.AttributeValueMemberS{Value: "SRS#" + language + "#" + string(kind) + "#"},
+		},
+	}
+	var ids []string
+	for {
+		out, err := r.client.Query(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("%w: query covered items: %v", domain.ErrStorageFailure, err)
+		}
+		var records []struct {
+			ItemID string `dynamodbav:"itemId"`
+		}
+		if err := attributevalue.UnmarshalListOfMaps(out.Items, &records); err != nil {
+			return nil, fmt.Errorf("%w: unmarshal covered items: %v", domain.ErrStorageFailure, err)
+		}
+		for _, record := range records {
+			ids = append(ids, record.ItemID)
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			return ids, nil
+		}
+		input.ExclusiveStartKey = out.LastEvaluatedKey
+	}
+}
+
 func (r *Repository) Snapshot(ctx context.Context, owner string) (outbound.ProgressSnapshot, error) {
 	var snapshot outbound.ProgressSnapshot
 	itemMaps, err := r.queryPrefix(ctx, owner, "SRS#")

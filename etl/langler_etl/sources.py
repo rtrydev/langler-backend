@@ -73,4 +73,11 @@ CURATED_GRAMMAR = Source(
     attribution="Langler project, original grammar topic inventory",
 )
 
-REGISTRY = _ALL + [CURATED_KANA, CURATED_GRAMMAR]
+CURATED_TOPICS = Source(
+    id="langler-curated",
+    url="langler-backend/etl/langler_etl/data/topics_ja.json",
+    license="CC BY-SA 4.0",
+    attribution="Langler project, original vocabulary topic classification",
+)
+
+REGISTRY = _ALL + [CURATED_KANA, CURATED_GRAMMAR, CURATED_TOPICS]

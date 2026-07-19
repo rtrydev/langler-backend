@@ -51,7 +51,7 @@ and declare the rest in an `attribution` map: `attribution.<part> = {sourceId, l
 | `pos` | L of S | jmdict-simplified part-of-speech tags (`n`, `v5u`, …) |
 | `level` | S | JLPT band from the community list (`N5`…`N1`) |
 | `freqBand` | N | Optional. 1 (most frequent) … 8, derived from wordfreq zipf: `band = clamp(round(8 - zipf), 1, 8)` |
-| `topics` | L of S | Optional semantic topic tags; empty today, reserved for the `topic` query filter |
+| `topics` | L of S | 1–3 curated topic slugs from `topics_ja.json` (`food-drink`, …); also drives the `topic` query filter |
 | `example` | M | Optional: `{text S, translation S, sourceId S, license S}` (Tatoeba/Tanaka pair) |
 
 ## Grammar topic item
@@ -63,6 +63,21 @@ and declare the rest in an `attribution` map: `attribution.<part> = {sourceId, l
 | `level` | S | JLPT band |
 | `description` | S | 1–2 sentence original description |
 | `example` | M | `{text S, translation S}` — original example sentence |
+
+## Topic catalog item
+
+`SK = TOPIC#<level>#<slug>`, one item per (level, topic) pair, aggregated by the
+ETL from the per-word `topics` tags in `langler_etl/data/topics_ja.json`
+(18-slug curated taxonomy; every built vocab word carries 1–3 slugs, enforced
+at build time).
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `slug` | S | Taxonomy slug (`food-drink`) |
+| `name` | S | Display name (`Food & drink`) |
+| `description` | S | One-line learner-facing description |
+| `level` | S | JLPT band |
+| `vocabIds` | L of S | Reference ids (`N5#1234567`) of the level's words tagged with this topic |
 
 ## Script glyph item
 

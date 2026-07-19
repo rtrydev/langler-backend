@@ -86,6 +86,83 @@ func (r *Repository) Grammar(ctx context.Context, filter outbound.GrammarFilter)
 	return outbound.GrammarPage{Topics: topics, NextCursor: page.nextCursor}, nil
 }
 
+func (r *Repository) Topics(ctx context.Context, filter outbound.TopicFilter) ([]domain.Topic, error) {
+	prefix := "TOPIC#"
+	if filter.Level != "" {
+		prefix += string(filter.Level) + "#"
+	}
+
+	var topics []domain.Topic
+	cursor := ""
+	for {
+		page, err := r.query(ctx, filter.Language, prefix, 100, cursor, "", nil)
+		if err != nil {
+			return nil, err
+		}
+		var items []topicItem
+		if err := attributevalue.UnmarshalListOfMaps(page.items, &items); err != nil {
+			return nil, fmt.Errorf("%w: unmarshal topic items: %v", domain.ErrStorageFailure, err)
+		}
+		for _, item := range items {
+			topic := item.toDomain()
+			if filter.Slug != "" && topic.Slug != filter.Slug {
+				continue
+			}
+			topics = append(topics, topic)
+		}
+		if page.nextCursor == "" {
+			return topics, nil
+		}
+		cursor = page.nextCursor
+	}
+}
+
+func (r *Repository) VocabByIDs(ctx context.Context, language domain.Language, ids []string) ([]domain.VocabEntry, error) {
+	found := make(map[string]domain.VocabEntry, len(ids))
+	for offset := 0; offset < len(ids); offset += 100 {
+		end := min(offset+100, len(ids))
+		keys := make([]map[string]types.AttributeValue, 0, end-offset)
+		for _, id := range ids[offset:end] {
+			keys = append(keys, referenceKey(string(language), "VOCAB#"+id))
+		}
+		if err := r.loadVocab(ctx, keys, found); err != nil {
+			return nil, err
+		}
+	}
+	entries := make([]domain.VocabEntry, 0, len(found))
+	for _, id := range ids {
+		if entry, ok := found[id]; ok {
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
+}
+
+func (r *Repository) loadVocab(ctx context.Context, keys []map[string]types.AttributeValue, result map[string]domain.VocabEntry) error {
+	pending := keys
+	for attempt := 0; len(pending) > 0 && attempt < 4; attempt++ {
+		out, err := r.client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{RequestItems: map[string]types.KeysAndAttributes{
+			r.table: {Keys: pending},
+		}})
+		if err != nil {
+			return fmt.Errorf("%w: batch get vocab: %v", domain.ErrStorageFailure, err)
+		}
+		var items []vocabItem
+		if err := attributevalue.UnmarshalListOfMaps(out.Responses[r.table], &items); err != nil {
+			return fmt.Errorf("%w: unmarshal vocab items: %v", domain.ErrStorageFailure, err)
+		}
+		for _, item := range items {
+			entry := item.toDomain()
+			result[entry.ID] = entry
+		}
+		pending = out.UnprocessedKeys[r.table].Keys
+	}
+	if len(pending) > 0 {
+		return fmt.Errorf("%w: vocab batch remained unprocessed", domain.ErrStorageFailure)
+	}
+	return nil
+}
+
 func (r *Repository) Scripts(ctx context.Context, filter outbound.ScriptFilter) (outbound.ScriptPage, error) {
 	prefix := "SCRIPT#"
 	if filter.ScriptType != "" {

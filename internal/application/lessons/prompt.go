@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	domain "github.com/rtrydev/langler-backend/internal/domain/lesson"
+	"github.com/rtrydev/langler-backend/internal/domain/progress"
 	"github.com/rtrydev/langler-backend/internal/domain/reference"
 	"github.com/rtrydev/langler-backend/internal/ports/inbound"
 	"github.com/rtrydev/langler-backend/internal/ports/outbound"
@@ -17,6 +18,7 @@ const (
 	referenceVocabSlice   = 20
 	referenceGrammarSlice = 8
 	maxPromptTopicLen     = 120
+	referencePageLimit    = 1000
 )
 
 var languageNames = map[domain.Language]string{
@@ -50,9 +52,11 @@ func (s *Service) Build(ctx context.Context, query inbound.LessonPromptQuery) (i
 }
 
 type promptRequest struct {
+	owner            string
 	language         domain.Language
 	level            domain.Level
 	topic            string
+	topicSlug        reference.TopicTag
 	exerciseTypes    []domain.ExerciseType
 	stage            domain.ReadingStage
 	length           string
@@ -66,12 +70,22 @@ func normalizePromptQuery(query inbound.LessonPromptQuery) (promptRequest, error
 	}
 
 	request := promptRequest{
+		owner:            strings.TrimSpace(query.Owner),
 		language:         domain.Language(query.Language),
 		level:            domain.Level(strings.ToUpper(query.Level)),
 		topic:            strings.TrimSpace(query.Topic),
 		stage:            domain.ReadingStage(query.ReadingStage),
 		length:           query.Length,
 		includeReference: query.IncludeReference,
+	}
+
+	if slug := strings.TrimSpace(query.TopicSlug); slug != "" {
+		tag, err := reference.NewTopicTag(slug)
+		if err != nil {
+			add("topicSlug", "must contain only lowercase letters, digits, and hyphens")
+		} else {
+			request.topicSlug = tag
+		}
 	}
 
 	if !domain.KnownLanguage(request.language) {
@@ -139,15 +153,120 @@ func (s *Service) referenceSlice(ctx context.Context, request promptRequest) ([]
 		return nil, nil, err
 	}
 
-	vocabPage, err := s.reader.Vocab(ctx, outbound.VocabFilter{Language: lang, Level: level, Limit: referenceVocabSlice})
+	vocab, err := s.vocabSlice(ctx, request, lang, level)
 	if err != nil {
 		return nil, nil, err
 	}
-	grammarPage, err := s.reader.Grammar(ctx, outbound.GrammarFilter{Language: lang, Level: level, Limit: referenceGrammarSlice})
+	grammar, err := s.grammarSlice(ctx, request, lang, level)
 	if err != nil {
 		return nil, nil, err
 	}
-	return vocabPage.Entries, grammarPage.Topics, nil
+	return vocab, grammar, nil
+}
+
+func (s *Service) vocabSlice(ctx context.Context, request promptRequest, lang reference.Language, level reference.Level) ([]reference.VocabEntry, error) {
+	covered, err := s.coveredIDs(ctx, request.owner, string(request.language), progress.KindVocab)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.topicSlug != "" {
+		topic, err := s.topicBySlug(ctx, lang, level, request.topicSlug)
+		if err != nil {
+			return nil, err
+		}
+		ids := selectUncoveredFirst(topic.VocabIDs, func(id string) string { return id }, covered, referenceVocabSlice)
+		return s.reader.VocabByIDs(ctx, lang, ids)
+	}
+
+	var entries []reference.VocabEntry
+	cursor := ""
+	for {
+		page, err := s.reader.Vocab(ctx, outbound.VocabFilter{Language: lang, Level: level, Limit: referencePageLimit, Cursor: cursor})
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, page.Entries...)
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	return selectUncoveredFirst(entries, func(e reference.VocabEntry) string { return e.ID }, covered, referenceVocabSlice), nil
+}
+
+func (s *Service) grammarSlice(ctx context.Context, request promptRequest, lang reference.Language, level reference.Level) ([]reference.GrammarTopic, error) {
+	covered, err := s.coveredIDs(ctx, request.owner, string(request.language), progress.KindGrammar)
+	if err != nil {
+		return nil, err
+	}
+
+	var topics []reference.GrammarTopic
+	cursor := ""
+	for {
+		page, err := s.reader.Grammar(ctx, outbound.GrammarFilter{Language: lang, Level: level, Limit: referencePageLimit, Cursor: cursor})
+		if err != nil {
+			return nil, err
+		}
+		topics = append(topics, page.Topics...)
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	return selectUncoveredFirst(topics, func(t reference.GrammarTopic) string { return t.ID }, covered, referenceGrammarSlice), nil
+}
+
+func (s *Service) topicBySlug(ctx context.Context, lang reference.Language, level reference.Level, slug reference.TopicTag) (reference.Topic, error) {
+	topics, err := s.reader.Topics(ctx, outbound.TopicFilter{Language: lang, Level: level, Slug: slug})
+	if err != nil {
+		return reference.Topic{}, err
+	}
+	for _, topic := range topics {
+		if topic.Slug == slug {
+			return topic, nil
+		}
+	}
+	return reference.Topic{}, &domain.ValidationError{Issues: []domain.Issue{{
+		Path:    "topicSlug",
+		Message: fmt.Sprintf("no topic %q exists for level %s", slug, level),
+	}}}
+}
+
+func (s *Service) coveredIDs(ctx context.Context, owner, language string, kind progress.ItemKind) (map[string]bool, error) {
+	if owner == "" {
+		return nil, nil
+	}
+	ids, err := s.coverage.CoveredItemIDs(ctx, owner, language, kind)
+	if err != nil {
+		return nil, err
+	}
+	covered := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		covered[id] = true
+	}
+	return covered, nil
+}
+
+func selectUncoveredFirst[T any](items []T, id func(T) string, covered map[string]bool, limit int) []T {
+	selected := make([]T, 0, min(limit, len(items)))
+	for _, item := range items {
+		if len(selected) == limit {
+			return selected
+		}
+		if !covered[id(item)] {
+			selected = append(selected, item)
+		}
+	}
+	for _, item := range items {
+		if len(selected) == limit {
+			return selected
+		}
+		if covered[id(item)] {
+			selected = append(selected, item)
+		}
+	}
+	return selected
 }
 
 func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar []reference.GrammarTopic) string {

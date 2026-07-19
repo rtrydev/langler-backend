@@ -67,7 +67,7 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo, progressSvc)
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, lessonRepo, progressSvc)
 	if err != nil {
 		return nil, err
 	}
@@ -88,5 +88,5 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 		return nil, err
 	}
 
-	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, tokenSvc, assessmentSvc)
+	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, tokenSvc, assessmentSvc)
 }

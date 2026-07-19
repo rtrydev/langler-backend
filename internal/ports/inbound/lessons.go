@@ -51,9 +51,11 @@ type LessonLibrary interface {
 }
 
 type LessonPromptQuery struct {
+	Owner            string
 	Language         string
 	Level            string
 	Topic            string
+	TopicSlug        string
 	ExerciseTypes    []string
 	ReadingStage     string
 	Length           string
@@ -66,6 +68,28 @@ type LessonPrompt struct {
 
 type LessonPromptBuilder interface {
 	Build(ctx context.Context, query LessonPromptQuery) (LessonPrompt, error)
+}
+
+type LessonTopicsQuery struct {
+	Owner    string
+	Language string
+	Level    string
+}
+
+type LessonTopic struct {
+	Slug         string
+	Name         string
+	Description  string
+	WordCount    int
+	CoveredCount int
+}
+
+type LessonTopicsResult struct {
+	Topics []LessonTopic
+}
+
+type LessonTopicAdvisor interface {
+	Topics(ctx context.Context, query LessonTopicsQuery) (LessonTopicsResult, error)
 }
 
 type LessonResultCommand struct {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rtrydev/langler-backend/internal/application/lessons"
 	domain "github.com/rtrydev/langler-backend/internal/domain/lesson"
+	"github.com/rtrydev/langler-backend/internal/domain/progress"
 	"github.com/rtrydev/langler-backend/internal/domain/reference"
 	"github.com/rtrydev/langler-backend/internal/ports/inbound"
 	"github.com/rtrydev/langler-backend/internal/ports/outbound"
@@ -89,7 +90,25 @@ func (f *fakeChecker) MissingGrammar(_ context.Context, _ reference.Language, _ 
 type fakeReader struct {
 	vocab   outbound.VocabPage
 	grammar outbound.GrammarPage
+	topics  []reference.Topic
+	byID    map[string]reference.VocabEntry
 	err     error
+}
+
+type fakeCoverage struct {
+	vocab   []string
+	grammar []string
+	err     error
+}
+
+func (f *fakeCoverage) CoveredItemIDs(_ context.Context, _, _ string, kind progress.ItemKind) ([]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if kind == progress.KindGrammar {
+		return f.grammar, nil
+	}
+	return f.vocab, nil
 }
 
 type fakeProgressRecorder struct {
@@ -120,9 +139,44 @@ func (f *fakeReader) Scripts(_ context.Context, _ outbound.ScriptFilter) (outbou
 	return outbound.ScriptPage{}, f.err
 }
 
+func (f *fakeReader) Topics(_ context.Context, filter outbound.TopicFilter) ([]reference.Topic, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	var matched []reference.Topic
+	for _, topic := range f.topics {
+		if filter.Level != "" && topic.Level != filter.Level {
+			continue
+		}
+		if filter.Slug != "" && topic.Slug != filter.Slug {
+			continue
+		}
+		matched = append(matched, topic)
+	}
+	return matched, nil
+}
+
+func (f *fakeReader) VocabByIDs(_ context.Context, _ reference.Language, ids []string) ([]reference.VocabEntry, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	entries := make([]reference.VocabEntry, 0, len(ids))
+	for _, id := range ids {
+		if entry, ok := f.byID[id]; ok {
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
+}
+
 func newService(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader) *lessons.Service {
 	t.Helper()
-	svc, err := lessons.NewService(store, checker, reader, store, &fakeProgressRecorder{})
+	return newServiceWithCoverage(t, store, checker, reader, &fakeCoverage{})
+}
+
+func newServiceWithCoverage(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader, coverage *fakeCoverage) *lessons.Service {
+	t.Helper()
+	svc, err := lessons.NewService(store, checker, reader, coverage, store, &fakeProgressRecorder{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -301,7 +355,7 @@ func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 
 	store := &fakeStore{record: outbound.LessonRecord{Lesson: validLesson()}}
 	progressRecorder := &fakeProgressRecorder{}
-	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, store, progressRecorder)
+	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, store, progressRecorder)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}

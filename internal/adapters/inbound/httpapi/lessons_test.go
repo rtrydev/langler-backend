@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonTopicAdvisor{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestHandleLessonResult(t *testing.T) {
 		Score:       8,
 		MaxScore:    8,
 	}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonTopicAdvisor{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -360,5 +360,66 @@ func TestHandleLessonResult(t *testing.T) {
 	}
 	if recorder.command.CompletedOn.Format(time.DateOnly) != "2026-07-18" {
 		t.Fatalf("CompletedOn = %v", recorder.command.CompletedOn)
+	}
+}
+
+func TestLessonTopicsReturnsSuggestions(t *testing.T) {
+	t.Parallel()
+
+	advisor := &fakeLessonTopicAdvisor{result: inbound.LessonTopicsResult{Topics: []inbound.LessonTopic{
+		{Slug: "food-drink", Name: "Food & drink", Description: "Meals and cooking", WordCount: 41, CoveredCount: 12},
+	}}}
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, advisor, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+
+	req := lessonRequest(http.MethodGet, "/lessons/topics", "user-1", "")
+	req.QueryStringParameters = map[string]string{"lang": "ja", "level": "N5"}
+	resp, _ := h.Handle(context.Background(), req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, resp.Body)
+	}
+	if advisor.query.Owner != "user-1" || advisor.query.Language != "ja" || advisor.query.Level != "N5" {
+		t.Fatalf("query = %+v", advisor.query)
+	}
+	var body struct {
+		Topics []struct {
+			Slug         string `json:"slug"`
+			Name         string `json:"name"`
+			WordCount    int    `json:"wordCount"`
+			CoveredCount int    `json:"coveredCount"`
+		} `json:"topics"`
+	}
+	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Topics) != 1 || body.Topics[0].Slug != "food-drink" || body.Topics[0].WordCount != 41 || body.Topics[0].CoveredCount != 12 {
+		t.Fatalf("body = %s", resp.Body)
+	}
+}
+
+func TestLessonTopicsRequiresAuthenticatedUser(t *testing.T) {
+	t.Parallel()
+
+	h := newLessonHandler(t, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
+	resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodGet, "/lessons/topics", "", ""))
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestLessonPromptForwardsOwnerAndTopicSlug(t *testing.T) {
+	t.Parallel()
+
+	prompts := &fakeLessonPromptBuilder{result: inbound.LessonPrompt{Prompt: "PROMPT"}}
+	h := newLessonHandler(t, &fakeLessonImporter{}, &fakeLessonLibrary{}, prompts)
+	body := `{"language":"ja","level":"N5","topic":"Food & drink","topicSlug":"food-drink","exerciseTypes":["cloze"]}`
+	resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodPost, "/lessons/prompt", "user-1", body))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, resp.Body)
+	}
+	if prompts.query.Owner != "user-1" || prompts.query.TopicSlug != "food-drink" {
+		t.Fatalf("query = %+v", prompts.query)
 	}
 }

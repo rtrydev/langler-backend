@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from conftest import FIXTURE_DATA
+from conftest import FIXTURE_DATA, FIXTURE_TOPICS
 
 from langler_etl import build
 
@@ -9,7 +9,9 @@ from langler_etl import build
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
     out_dir = tmp_path_factory.mktemp("out")
-    manifest = build.build(FIXTURE_DATA, out_dir, band=lambda headword, reading: 3)
+    manifest = build.build(
+        FIXTURE_DATA, out_dir, band=lambda headword, reading: 3, topic_data=FIXTURE_TOPICS
+    )
     return out_dir, manifest
 
 
@@ -34,7 +36,7 @@ def test_manifest_counts_match_output_lines(built):
 def test_every_item_carries_source_and_license(built):
     out_dir, _ = built
     ref = out_dir / "reference" / "ja"
-    for name in ("vocab.jsonl", "grammar.jsonl", "scripts.jsonl"):
+    for name in ("vocab.jsonl", "grammar.jsonl", "scripts.jsonl", "topics.jsonl"):
         for item in _read_jsonl(ref / name):
             assert item["PK"] == "REF#ja"
             assert item["SK"]
@@ -87,4 +89,4 @@ def test_manifest_lists_source_registry(built):
         "wordfreq",
         "langler-curated",
     }
-    assert len(by_id["langler-curated"]) == 2
+    assert len(by_id["langler-curated"]) == 3

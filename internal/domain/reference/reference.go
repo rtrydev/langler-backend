@@ -81,6 +81,14 @@ type VocabEntry struct {
 	License       string
 }
 
+type Topic struct {
+	Slug        TopicTag
+	Name        string
+	Description string
+	Level       Level
+	VocabIDs    []string
+}
+
 type GrammarTopic struct {
 	ID          string
 	TopicID     string

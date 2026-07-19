@@ -63,7 +63,7 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("progress.NewService: %v", err)
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, lessonRepo, progressSvc)
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, lessonRepo, progressSvc)
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assessments.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{}, assessmentSvc)
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{}, assessmentSvc)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -175,11 +175,14 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 		}
 	}
 
+	importKey := fmt.Sprintf("e2e-import-key-%d", time.Now().UnixNano())
+	importLessonID := fmt.Sprintf("7b6f7d3e-4a5b-4c6d-8e9f-%012x", time.Now().UnixNano()&0xffffffffffff)
+
 	send := func(method, path, owner string, payload any) (int, map[string]any) {
 		t.Helper()
 		req := events.APIGatewayV2HTTPRequest{RawPath: path}
 		if path == "/lessons/import" {
-			req.Headers = map[string]string{"Idempotency-Key": "e2e-import-key"}
+			req.Headers = map[string]string{"Idempotency-Key": importKey}
 		}
 		req.RequestContext.HTTP.Method = method
 		if owner != "" {
@@ -223,30 +226,80 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 		t.Fatalf("prompt missing story instructions or reference ids: %.400s", promptText)
 	}
 
+	topicsReq := events.APIGatewayV2HTTPRequest{
+		RawPath:               "/lessons/topics",
+		QueryStringParameters: map[string]string{"lang": "ja", "level": "N5"},
+	}
+	topicsReq.RequestContext.HTTP.Method = http.MethodGet
+	topicsReq.RequestContext.Authorizer = &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+		JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+			Claims: map[string]string{"sub": "e2e-user"},
+		},
+	}
+	topicsResp, err := h.Handle(ctx, topicsReq)
+	if err != nil {
+		t.Fatalf("Handle GET /lessons/topics: %v", err)
+	}
+	if topicsResp.StatusCode != http.StatusOK {
+		t.Fatalf("topics: status %d body %s", topicsResp.StatusCode, topicsResp.Body)
+	}
+	var topicList struct {
+		Topics []struct {
+			Slug         string `json:"slug"`
+			Name         string `json:"name"`
+			WordCount    int    `json:"wordCount"`
+			CoveredCount int    `json:"coveredCount"`
+		} `json:"topics"`
+	}
+	if err := json.Unmarshal([]byte(topicsResp.Body), &topicList); err != nil {
+		t.Fatalf("unmarshal topics: %v", err)
+	}
+	if len(topicList.Topics) != 18 {
+		t.Fatalf("topics = %d, want the full 18-slug taxonomy", len(topicList.Topics))
+	}
+	firstTopic := topicList.Topics[0]
+	if firstTopic.WordCount <= 0 {
+		t.Fatalf("topic %q has no words", firstTopic.Slug)
+	}
+	t.Logf("topics: %d for N5, first %q (%d/%d covered)", len(topicList.Topics), firstTopic.Slug, firstTopic.CoveredCount, firstTopic.WordCount)
+
+	statusCode, topicPrompt := send(http.MethodPost, "/lessons/prompt", "e2e-user", map[string]any{
+		"language":      "ja",
+		"level":         "N5",
+		"topic":         firstTopic.Name,
+		"topicSlug":     firstTopic.Slug,
+		"exerciseTypes": []string{"cloze", "reading"},
+	})
+	if statusCode != http.StatusOK {
+		t.Fatalf("topic prompt: status %d body %v", statusCode, topicPrompt)
+	}
+	if text, _ := topicPrompt["prompt"].(string); !strings.Contains(text, "N5#") {
+		t.Fatalf("topic prompt missing reference ids: %.400s", text)
+	}
+
+	statusCode, badTopic := send(http.MethodPost, "/lessons/prompt", "e2e-user", map[string]any{
+		"language":      "ja",
+		"level":         "N5",
+		"topicSlug":     "space-travel",
+		"exerciseTypes": []string{"cloze"},
+	})
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("unknown topic slug: status %d body %v", statusCode, badTopic)
+	}
+
 	vocabBody := call("/reference/vocab", map[string]string{"lang": "ja", "level": "N5", "limit": "1"})
 	vocabID := vocabBody["items"].([]any)[0].(map[string]any)["id"].(string)
 
 	lessonDoc := map[string]any{
 		"schemaVersion": "1.0",
-		"lessonId":      "7b6f7d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+		"lessonId":      importLessonID,
 		"language":      "ja",
 		"level":         "N5",
 		"title":         "E2E smoke lesson",
 		"readingStage":  "connected",
 		"exercises": []map[string]any{
 			{
-				"exerciseId":      "ex-1",
-				"type":            "cloze",
-				"prompt":          "Fill in the blank.",
-				"points":          4,
-				"referencedVocab": []string{vocabID},
-				"payload": map[string]any{
-					"text":   "わたしは{{1}}へ行きます。",
-					"blanks": []map[string]any{{"index": 1, "answer": "学校"}},
-				},
-			},
-			{
-				"exerciseId": "ex-2",
+				"exerciseId": "ex-1",
 				"type":       "reading",
 				"prompt":     "Read the story and answer.",
 				"points":     6,
@@ -262,6 +315,17 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 							"answer":   "学校",
 						},
 					},
+				},
+			},
+			{
+				"exerciseId":      "ex-2",
+				"type":            "cloze",
+				"prompt":          "Fill in the blank.",
+				"points":          4,
+				"referencedVocab": []string{vocabID},
+				"payload": map[string]any{
+					"text":   "わたしは{{1}}へ行きます。",
+					"blanks": []map[string]any{{"index": 1, "answer": "学校"}},
 				},
 			},
 		},

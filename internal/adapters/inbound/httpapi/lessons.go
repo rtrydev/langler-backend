@@ -237,6 +237,7 @@ func (h *Handler) handleLessonPrompt(ctx context.Context, req events.APIGatewayV
 		Language         string   `json:"language"`
 		Level            string   `json:"level"`
 		Topic            string   `json:"topic"`
+		TopicSlug        string   `json:"topicSlug"`
 		ExerciseTypes    []string `json:"exerciseTypes"`
 		ReadingStage     string   `json:"readingStage"`
 		Length           string   `json:"length"`
@@ -251,9 +252,11 @@ func (h *Handler) handleLessonPrompt(ctx context.Context, req events.APIGatewayV
 		includeReference = *dto.IncludeReference
 	}
 	result, err := h.prompts.Build(ctx, inbound.LessonPromptQuery{
+		Owner:            ownerFrom(req),
 		Language:         dto.Language,
 		Level:            dto.Level,
 		Topic:            dto.Topic,
+		TopicSlug:        dto.TopicSlug,
 		ExerciseTypes:    dto.ExerciseTypes,
 		ReadingStage:     dto.ReadingStage,
 		Length:           dto.Length,
@@ -263,6 +266,40 @@ func (h *Handler) handleLessonPrompt(ctx context.Context, req events.APIGatewayV
 		return lessonError(ctx, err)
 	}
 	return respondJSON(http.StatusOK, map[string]string{"prompt": result.Prompt})
+}
+
+type lessonTopicDTO struct {
+	Slug         string `json:"slug"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	WordCount    int    `json:"wordCount"`
+	CoveredCount int    `json:"coveredCount"`
+}
+
+func (h *Handler) handleLessonTopics(ctx context.Context, req events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
+	owner := ownerFrom(req)
+	if owner == "" {
+		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
+	}
+	result, err := h.topics.Topics(ctx, inbound.LessonTopicsQuery{
+		Owner:    owner,
+		Language: req.QueryStringParameters["lang"],
+		Level:    req.QueryStringParameters["level"],
+	})
+	if err != nil {
+		return lessonError(ctx, err)
+	}
+	items := make([]lessonTopicDTO, 0, len(result.Topics))
+	for _, topic := range result.Topics {
+		items = append(items, lessonTopicDTO{
+			Slug:         topic.Slug,
+			Name:         topic.Name,
+			Description:  topic.Description,
+			WordCount:    topic.WordCount,
+			CoveredCount: topic.CoveredCount,
+		})
+	}
+	return respondJSON(http.StatusOK, map[string][]lessonTopicDTO{"topics": items})
 }
 
 func (h *Handler) handleLessonList(ctx context.Context, req events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {

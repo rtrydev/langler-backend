@@ -55,6 +55,24 @@ func (v vocabItem) toDomain() domain.VocabEntry {
 	}
 }
 
+type topicItem struct {
+	Slug        string   `dynamodbav:"slug"`
+	Name        string   `dynamodbav:"name"`
+	Description string   `dynamodbav:"description"`
+	Level       string   `dynamodbav:"level"`
+	VocabIDs    []string `dynamodbav:"vocabIds"`
+}
+
+func (t topicItem) toDomain() domain.Topic {
+	return domain.Topic{
+		Slug:        domain.TopicTag(t.Slug),
+		Name:        t.Name,
+		Description: t.Description,
+		Level:       domain.Level(t.Level),
+		VocabIDs:    t.VocabIDs,
+	}
+}
+
 type grammarItem struct {
 	SK          string       `dynamodbav:"SK"`
 	TopicID     string       `dynamodbav:"topicId"`

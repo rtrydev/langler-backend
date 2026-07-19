@@ -126,6 +126,14 @@ func (f *fakeReader) Scripts(_ context.Context, _ outbound.ScriptFilter) (outbou
 	return outbound.ScriptPage{}, nil
 }
 
+func (f *fakeReader) Topics(_ context.Context, _ outbound.TopicFilter) ([]reference.Topic, error) {
+	return nil, nil
+}
+
+func (f *fakeReader) VocabByIDs(_ context.Context, _ reference.Language, _ []string) ([]reference.VocabEntry, error) {
+	return nil, nil
+}
+
 func newService(t *testing.T, store *fakeStore) *assessments.Service {
 	t.Helper()
 	service, err := assessments.NewService(store, newFakeReader([]string{"N5", "N4", "N3", "N2", "N1"}))

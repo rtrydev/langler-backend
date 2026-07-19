@@ -44,8 +44,16 @@ type ScriptPage struct {
 	NextCursor string
 }
 
+type TopicFilter struct {
+	Language reference.Language
+	Level    reference.Level
+	Slug     reference.TopicTag
+}
+
 type ReferenceReader interface {
 	Vocab(ctx context.Context, filter VocabFilter) (VocabPage, error)
 	Grammar(ctx context.Context, filter GrammarFilter) (GrammarPage, error)
 	Scripts(ctx context.Context, filter ScriptFilter) (ScriptPage, error)
+	Topics(ctx context.Context, filter TopicFilter) ([]reference.Topic, error)
+	VocabByIDs(ctx context.Context, language reference.Language, ids []string) ([]reference.VocabEntry, error)
 }

@@ -93,13 +93,22 @@ reference API. Never `Scan`.
 All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
 
 - `POST /lessons/prompt` — build the copy-paste generation prompt.
-  Body: `{"language", "level", "topic"?, "exerciseTypes": [...],
+  Body: `{"language", "level", "topic"?, "topicSlug"?, "exerciseTypes": [...],
   "readingStage"?, "length"?: "short"|"standard"|"long", "includeReference"?}`.
   `connected` (default) forces a `reading` exercise into the requested types and
   demands a grounded short story that opens the lesson, followed by exercises
   ordered from recognition to production; `foundational` removes it. With
   `includeReference` (default true) a slice of level-matched vocab and grammar
-  with their reference ids is embedded.
+  with their reference ids is embedded. The slice prefers items the owner has
+  no SRS record for yet, so repeated prompts walk the level instead of
+  repeating the first page. When `topicSlug` names a curated topic
+  (`TOPIC#<level>#<slug>` reference items, e.g. `food-drink`), the vocab slice
+  is drawn from that topic's word list instead of the whole level; an unknown
+  slug for the level is a `400` validation error.
+- `GET /lessons/topics?lang&level` — the curated topic list for a level with
+  per-user coverage: `{"topics": [{"slug", "name", "description", "wordCount",
+  "coveredCount"}]}`, sorted least-covered first. `coveredCount` counts the
+  topic's words that already have an SRS record for the caller.
 - `POST /lessons/import` — validate and store a lesson document with an
   `Idempotency-Key` header. `201` with a summary on first import, `200` with
   `"created": false` on replay. The machine API exposes this same path through

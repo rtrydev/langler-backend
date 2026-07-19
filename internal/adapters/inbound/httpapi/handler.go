@@ -19,6 +19,7 @@ type Handler struct {
 	importer    inbound.LessonImporter
 	library     inbound.LessonLibrary
 	prompts     inbound.LessonPromptBuilder
+	topics      inbound.LessonTopicAdvisor
 	results     inbound.LessonResultRecorder
 	progress    inbound.ProgressProvider
 	tokens      inbound.AgentTokenManager
@@ -31,6 +32,7 @@ func NewHandler(
 	importer inbound.LessonImporter,
 	library inbound.LessonLibrary,
 	prompts inbound.LessonPromptBuilder,
+	topics inbound.LessonTopicAdvisor,
 	results inbound.LessonResultRecorder,
 	progress inbound.ProgressProvider,
 	tokens inbound.AgentTokenManager,
@@ -51,6 +53,9 @@ func NewHandler(
 	if prompts == nil {
 		return nil, errors.New("lesson prompt builder must not be nil")
 	}
+	if topics == nil {
+		return nil, errors.New("lesson topic advisor must not be nil")
+	}
 	if results == nil {
 		return nil, errors.New("lesson result recorder must not be nil")
 	}
@@ -63,7 +68,7 @@ func NewHandler(
 	if assessments == nil {
 		return nil, errors.New("assessment provider must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, results: results, progress: progress, tokens: tokens, assessments: assessments}, nil
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, topics: topics, results: results, progress: progress, tokens: tokens, assessments: assessments}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -82,6 +87,8 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return h.handleScripts(ctx, req.QueryStringParameters), nil
 	case method == http.MethodPost && path == "/lessons/prompt":
 		return h.handleLessonPrompt(ctx, req), nil
+	case method == http.MethodGet && path == "/lessons/topics":
+		return h.handleLessonTopics(ctx, req), nil
 	case method == http.MethodPost && path == "/lessons/import":
 		return h.handleLessonImport(ctx, req), nil
 	case method == http.MethodPost && path == "/agent-tokens":

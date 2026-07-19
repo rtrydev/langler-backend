@@ -105,6 +105,27 @@ func seedReferenceData(t *testing.T, client *dynamodb.Client, table string) {
 			"sourceId": "jmdict-simplified", "license": "CC BY-SA 4.0 (EDRDG)",
 		},
 		{
+			"PK": "REF#ja", "SK": "TOPIC#N5#daily-life", "lang": "ja",
+			"slug": "daily-life", "name": "Daily life",
+			"description": "Everyday routines, actions, and common objects",
+			"level":       "N5", "vocabIds": []string{"N5#1000001"},
+			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
+		},
+		{
+			"PK": "REF#ja", "SK": "TOPIC#N5#nature-weather", "lang": "ja",
+			"slug": "nature-weather", "name": "Nature & weather",
+			"description": "Weather, seasons, animals, plants, and landscapes",
+			"level":       "N5", "vocabIds": []string{"N5#1000002"},
+			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
+		},
+		{
+			"PK": "REF#ja", "SK": "TOPIC#N4#abstract-concepts", "lang": "ja",
+			"slug": "abstract-concepts", "name": "Abstract concepts",
+			"description": "Ideas, change, degree, and ways of thinking",
+			"level":       "N4", "vocabIds": []string{"N4#1000003"},
+			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
+		},
+		{
 			"PK": "REF#ja", "SK": "GRAMMAR#N5#particle-wa", "lang": "ja",
 			"topicId": "particle-wa", "name": "Topic particle は", "level": "N5",
 			"description": "Marks the topic of the sentence.",
@@ -298,4 +319,64 @@ func TestScriptQueries(t *testing.T) {
 			t.Errorf("components = %v, want 2 entries", kanji.Components)
 		}
 	})
+}
+
+func TestTopicQueries(t *testing.T) {
+	repo := newRepository(t)
+	ctx := context.Background()
+
+	t.Run("level scoped", func(t *testing.T) {
+		topics, err := repo.Topics(ctx, outbound.TopicFilter{Language: "ja", Level: "N5"})
+		if err != nil {
+			t.Fatalf("Topics: %v", err)
+		}
+		if len(topics) != 2 {
+			t.Fatalf("topics = %+v, want 2", topics)
+		}
+		if topics[0].Slug != "daily-life" || topics[0].Name != "Daily life" || topics[0].Level != "N5" {
+			t.Errorf("topic = %+v", topics[0])
+		}
+		if len(topics[0].VocabIDs) != 1 || topics[0].VocabIDs[0] != "N5#1000001" {
+			t.Errorf("vocabIds = %v", topics[0].VocabIDs)
+		}
+	})
+
+	t.Run("slug scoped", func(t *testing.T) {
+		topics, err := repo.Topics(ctx, outbound.TopicFilter{Language: "ja", Level: "N5", Slug: "nature-weather"})
+		if err != nil {
+			t.Fatalf("Topics: %v", err)
+		}
+		if len(topics) != 1 || topics[0].Slug != "nature-weather" {
+			t.Fatalf("topics = %+v", topics)
+		}
+	})
+
+	t.Run("unknown slug", func(t *testing.T) {
+		topics, err := repo.Topics(ctx, outbound.TopicFilter{Language: "ja", Level: "N5", Slug: "space-travel"})
+		if err != nil {
+			t.Fatalf("Topics: %v", err)
+		}
+		if len(topics) != 0 {
+			t.Fatalf("topics = %+v, want none", topics)
+		}
+	})
+}
+
+func TestVocabByIDs(t *testing.T) {
+	repo := newRepository(t)
+	ctx := context.Background()
+
+	entries, err := repo.VocabByIDs(ctx, "ja", []string{"N4#1000003", "N5#1000001", "N5#missing"})
+	if err != nil {
+		t.Fatalf("VocabByIDs: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries = %+v, want 2", entries)
+	}
+	if entries[0].ID != "N4#1000003" || entries[1].ID != "N5#1000001" {
+		t.Errorf("order = %q, %q; want input order", entries[0].ID, entries[1].ID)
+	}
+	if entries[1].Headword != "学校" || entries[1].Topics[0] != "daily-life" {
+		t.Errorf("entry = %+v", entries[1])
+	}
 }

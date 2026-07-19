@@ -36,6 +36,14 @@ func (f *fakeReader) Scripts(_ context.Context, filter outbound.ScriptFilter) (o
 	return f.scriptPage, f.err
 }
 
+func (f *fakeReader) Topics(_ context.Context, _ outbound.TopicFilter) ([]domain.Topic, error) {
+	return nil, f.err
+}
+
+func (f *fakeReader) VocabByIDs(_ context.Context, _ domain.Language, _ []string) ([]domain.VocabEntry, error) {
+	return nil, f.err
+}
+
 func TestNewServiceRejectsNilReader(t *testing.T) {
 	t.Parallel()
 
