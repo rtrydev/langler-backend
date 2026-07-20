@@ -48,7 +48,7 @@ func newAssessmentHandler(t *testing.T, provider *fakeAssessmentProvider) *httpa
 	t.Helper()
 	handler, err := httpapi.NewHandler(
 		fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{},
-		&fakeLessonPromptBuilder{}, &fakeLessonTopicAdvisor{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, provider,
+		&fakeLessonPromptBuilder{}, &fakeLessonTopicAdvisor{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeGlossaryProvider{}, &fakeAgentTokenManager{}, provider,
 	)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)

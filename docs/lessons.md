@@ -85,6 +85,12 @@ report back to their AI.
 | Lesson | `USER#<cognito sub>` | `LESSON#<lessonId>` |
 | Lesson result | `USER#<owner>` | `RESULT#<lessonId>#<completed timestamp>#<attemptId>` |
 | Import marker | `USER#<owner>` | `IDEMPOTENCY#<sha256(key)>` |
+| Glossary word | `USER#<owner>` | `GLOSSARY#<language>#<vocab\|grammar>#<referenceId>` |
+
+Glossary rows are reference-counted by lesson: `lessonIds` is a string set,
+`ADD`-ed on import and `DELETE`-d on lesson deletion; the row is removed when
+the set empties. `addedAt` keeps the first import time. They are independent of
+SRS rows — completing a lesson still creates `SRS#` items exactly as before.
 
 Items store the full lesson document under `dynamodbav` attributes plus
 `createdAt` (RFC 3339) and `contentHash`. Listing is a key-scoped `Query`
@@ -103,8 +109,9 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   ordered from recognition to production; `foundational` removes it. With
   `includeReference` (default true) a slice of level-matched vocab and grammar
   with their reference ids is embedded. The slice prefers items the owner has
-  no SRS record for yet, so repeated prompts walk the level instead of
-  repeating the first page. When `topicSlug` names a curated topic
+  neither an SRS record nor a glossary entry for yet, so repeated prompts walk
+  the level instead of repeating the first page — words in freshly imported
+  (not yet completed) lessons already count as covered. When `topicSlug` names a curated topic
   (`TOPIC#<level>#<slug>` reference items, e.g. `food-dining`), the vocab slice
   is drawn from that topic's word list instead of the whole level; an unknown
   slug for the level is a `400` validation error. A free-text `topic` without
@@ -127,11 +134,23 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   topic's words that already have an SRS record for the caller.
 - `POST /lessons/import` — validate and store a lesson document with an
   `Idempotency-Key` header. `201` with a summary on first import, `200` with
-  `"created": false` on replay. The machine API exposes this same path through
-  the token owner injected by its Lambda authorizer.
+  `"created": false` on replay. Every referenced vocab/grammar id is also added
+  to the owner's glossary (replay included, which repairs a partial failure).
+  The machine API exposes this same path through the token owner injected by
+  its Lambda authorizer.
 - `GET /lessons?limit&cursor` — summaries (`{"items": [...], "nextCursor"}`).
 - `GET /lessons/{id}` — the full stored document plus `createdAt`.
-- `DELETE /lessons/{id}` — `204`; `404` if absent.
+- `DELETE /lessons/{id}` — `204`; `404` if absent. Removes the lesson's words
+  from the glossary first (a word stays while another lesson still references
+  it), then deletes the lesson row, so a failed delete can be retried.
+- `GET /glossary?language` — the owner's vocabulary glossary: every vocab word
+  referenced by an imported lesson, hydrated from reference data. Without
+  `language` all supported languages are returned:
+  `{"languages": [{"language", "words": [{"itemId", "headword", "reading",
+  "gloss": [...], "level", "lessonCount", "addedAt"}]}]}`, newest first.
+  `lessonCount` is how many of the owner's lessons currently reference the
+  word. Grammar ids are tracked in glossary rows too (for coverage), but only
+  vocab is listed here.
 - `POST /lessons/{id}/results` — validate and persist a completed attempt with
   aggregate auto/self scores and a per-exercise breakdown. Result records are
   user-scoped raw outcomes; no SRS schedule is created at this stage.

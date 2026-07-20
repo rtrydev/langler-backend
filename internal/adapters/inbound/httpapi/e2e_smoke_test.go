@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoassessments"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoglossary"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
@@ -70,7 +72,11 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("progress.NewService: %v", err)
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, unconfiguredSemantic{}, lessonRepo, progressSvc)
+	glossaryRepo, err := dynamoglossary.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("dynamoglossary.NewRepository: %v", err)
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, unconfiguredSemantic{}, lessonRepo, progressSvc, glossaryRepo)
 	if err != nil {
 		t.Fatalf("lessons.NewService: %v", err)
 	}
@@ -82,7 +88,7 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assessments.NewService: %v", err)
 	}
-	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, &fakeAgentTokenManager{}, assessmentSvc)
+	h, err := httpapi.NewHandler(statusSvc, refSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, lessonsSvc, &fakeAgentTokenManager{}, assessmentSvc)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -356,6 +362,65 @@ func TestE2EAgainstLoadedReferenceData(t *testing.T) {
 	statusCode, replay := send(http.MethodPost, "/lessons/import", "e2e-user", lessonDoc)
 	if statusCode != http.StatusOK || replay["created"] != false {
 		t.Fatalf("duplicate import: status %d body %v", statusCode, replay)
+	}
+
+	glossaryWords := func(owner string) []string {
+		t.Helper()
+		req := getRequest("/glossary", map[string]string{"language": "ja"})
+		req.RequestContext.Authorizer = &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+			JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+				Claims: map[string]string{"sub": owner},
+			},
+		}
+		resp, err := h.Handle(ctx, req)
+		if err != nil {
+			t.Fatalf("Handle GET /glossary: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("glossary: status %d body %s", resp.StatusCode, resp.Body)
+		}
+		var body struct {
+			Languages []struct {
+				Language string `json:"language"`
+				Words    []struct {
+					ItemID string `json:"itemId"`
+				} `json:"words"`
+			} `json:"languages"`
+		}
+		if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+			t.Fatalf("unmarshal glossary: %v", err)
+		}
+		var ids []string
+		for _, language := range body.Languages {
+			for _, word := range language.Words {
+				ids = append(ids, word.ItemID)
+			}
+		}
+		return ids
+	}
+
+	glossaryOwner := fmt.Sprintf("e2e-glossary-user-%d", time.Now().UnixNano())
+	glossaryDoc := map[string]any{}
+	for key, value := range lessonDoc {
+		glossaryDoc[key] = value
+	}
+	glossaryDoc["lessonId"] = fmt.Sprintf("9d8e9f5a-6c7d-4e8f-a0b1-%012x", time.Now().UnixNano()&0xffffffffffff)
+	statusCode, glossaryImported := send(http.MethodPost, "/lessons/import", glossaryOwner, glossaryDoc)
+	if statusCode != http.StatusCreated {
+		t.Fatalf("glossary import: status %d body %v", statusCode, glossaryImported)
+	}
+	glossaryLessonID := glossaryImported["lessonId"].(string)
+	t.Cleanup(func() {
+		send(http.MethodDelete, "/lessons/"+glossaryLessonID, glossaryOwner, nil)
+	})
+	if words := glossaryWords(glossaryOwner); !slices.Contains(words, vocabID) {
+		t.Fatalf("glossary after import = %v, want %s", words, vocabID)
+	}
+	if statusCode, _ = send(http.MethodDelete, "/lessons/"+glossaryLessonID, glossaryOwner, nil); statusCode != http.StatusNoContent {
+		t.Fatalf("glossary delete: status %d, want 204", statusCode)
+	}
+	if words := glossaryWords(glossaryOwner); len(words) != 0 {
+		t.Fatalf("glossary after delete = %v, want empty", words)
 	}
 
 	badDoc := map[string]any{

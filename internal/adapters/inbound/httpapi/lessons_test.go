@@ -35,7 +35,7 @@ func newLessonHandler(
 	prompts *fakeLessonPromptBuilder,
 ) *httpapi.Handler {
 	t.Helper()
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonTopicAdvisor{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, importer, library, prompts, &fakeLessonTopicAdvisor{}, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeGlossaryProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestHandleLessonResult(t *testing.T) {
 		Score:       8,
 		MaxScore:    8,
 	}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonTopicAdvisor{}, recorder, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, &fakeLessonTopicAdvisor{}, recorder, &fakeProgressProvider{}, &fakeGlossaryProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestLessonTopicsReturnsSuggestions(t *testing.T) {
 	advisor := &fakeLessonTopicAdvisor{result: inbound.LessonTopicsResult{Topics: []inbound.LessonTopic{
 		{Slug: "food-dining", Name: "Food & dining", Description: "Meals and cooking", WordCount: 41, CoveredCount: 12},
 	}}}
-	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, advisor, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
+	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, advisor, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeGlossaryProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}

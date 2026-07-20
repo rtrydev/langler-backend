@@ -92,6 +92,34 @@ type LessonTopicAdvisor interface {
 	Topics(ctx context.Context, query LessonTopicsQuery) (LessonTopicsResult, error)
 }
 
+type GlossaryQuery struct {
+	Owner    string
+	Language string
+}
+
+type GlossaryWord struct {
+	ID          string
+	Headword    string
+	Reading     string
+	Gloss       []string
+	Level       string
+	LessonCount int
+	AddedAt     time.Time
+}
+
+type GlossaryLanguage struct {
+	Language string
+	Words    []GlossaryWord
+}
+
+type GlossaryResult struct {
+	Languages []GlossaryLanguage
+}
+
+type GlossaryProvider interface {
+	Glossary(ctx context.Context, query GlossaryQuery) (GlossaryResult, error)
+}
+
 type LessonResultCommand struct {
 	Owner       string
 	CompletedOn time.Time
