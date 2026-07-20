@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -241,6 +240,6 @@ func assessmentError(ctx context.Context, err error) events.APIGatewayV2HTTPResp
 	case errors.Is(err, assessment.ErrNotFound):
 		return errorJSON(http.StatusNotFound, err.Error())
 	}
-	slog.ErrorContext(ctx, "assessment request failed", "error", err)
+	loggerFrom(ctx).ErrorContext(ctx, "assessment request failed", "error", err)
 	return errorJSON(http.StatusInternalServerError, "internal error")
 }

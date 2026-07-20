@@ -24,6 +24,8 @@ func NewHandler(authorizer inbound.MachineAuthorizer) (*Handler, error) {
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2CustomAuthorizerV2Request) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
+	logger := slog.With("requestId", req.RequestContext.RequestID, "route", req.RouteKey)
+
 	authorization := ""
 	for key, value := range req.Headers {
 		if strings.EqualFold(key, "Authorization") {
@@ -34,13 +36,15 @@ func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2CustomAutho
 	secret, ok := strings.CutPrefix(strings.TrimSpace(authorization), "Bearer ")
 	requiredScope, scoped := requiredScope(req.RouteKey)
 	if !ok || !scoped {
+		logger.WarnContext(ctx, "machine request denied", "reason", "missing bearer token or unscoped route")
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
 	}
 	result, err := h.authorizer.Authorize(ctx, secret, requiredScope)
 	if err != nil {
-		slog.WarnContext(ctx, "machine request denied", "route", req.RouteKey, "error", err)
+		logger.WarnContext(ctx, "machine request denied", "error", err)
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
 	}
+	logger.InfoContext(ctx, "machine request authorized", "owner", result.Owner, "tokenId", result.TokenID)
 	return events.APIGatewayV2CustomAuthorizerSimpleResponse{
 		IsAuthorized: true,
 		Context:      map[string]interface{}{"owner": result.Owner, "tokenId": result.TokenID},

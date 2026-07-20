@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -169,6 +168,6 @@ func progressError(ctx context.Context, err error) events.APIGatewayV2HTTPRespon
 	case errors.Is(err, progress.ErrNotFound):
 		return errorJSON(http.StatusNotFound, err.Error())
 	}
-	slog.ErrorContext(ctx, "progress request failed", "error", err)
+	loggerFrom(ctx).ErrorContext(ctx, "progress request failed", "error", err)
 	return errorJSON(http.StatusInternalServerError, "internal error")
 }

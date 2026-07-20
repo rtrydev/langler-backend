@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -119,5 +120,77 @@ func TestRepositoryLifecycleAndRateLimit(t *testing.T) {
 	}
 	if err := repo.Revoke(ctx, "user-2", token.ID, revokedAt); !errors.Is(err, agenttoken.ErrNotFound) {
 		t.Fatalf("cross-owner Revoke error = %v, want %v", err, agenttoken.ErrNotFound)
+	}
+}
+
+func TestCreateSetsExpirySweepTTL(t *testing.T) {
+	client := localClient(t)
+	table := createTable(t, client)
+	repo, err := dynamoagenttokens.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	ctx := context.Background()
+	createdAt := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	expiresAt := createdAt.Add(24 * time.Hour)
+	token, err := agenttoken.New("token-1", "user-1", "Claude Code", "abcd", []agenttoken.Scope{agenttoken.ScopeReadReference}, createdAt, expiresAt)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := repo.Create(ctx, token, "hash-1"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	for _, key := range []map[string]types.AttributeValue{
+		{"PK": &types.AttributeValueMemberS{Value: "USER#user-1"}, "SK": &types.AttributeValueMemberS{Value: "AGENTTOKEN#token-1"}},
+		{"PK": &types.AttributeValueMemberS{Value: "AGENTTOKENHASH#hash-1"}, "SK": &types.AttributeValueMemberS{Value: "AGENTTOKEN"}},
+	} {
+		out, err := client.GetItem(ctx, &dynamodb.GetItemInput{TableName: aws.String(table), Key: key})
+		if err != nil {
+			t.Fatalf("GetItem: %v", err)
+		}
+		ttl, ok := out.Item["expiresAtUnix"].(*types.AttributeValueMemberN)
+		if !ok {
+			t.Fatalf("expiresAtUnix missing or wrong type: %+v", out.Item["expiresAtUnix"])
+		}
+		wantTTL := expiresAt.Add(30 * 24 * time.Hour).Unix()
+		if ttl.Value != strconv.FormatInt(wantTTL, 10) {
+			t.Fatalf("expiresAtUnix = %s, want %d", ttl.Value, wantTTL)
+		}
+	}
+}
+
+func TestConsumeHoldsLimitUnderConcurrentLoad(t *testing.T) {
+	client := localClient(t)
+	table := createTable(t, client)
+	repo, err := dynamoagenttokens.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	ctx := context.Background()
+	window := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	const limit = agenttoken.RequestsPerMinute
+	const attempts = limit * 3
+
+	results := make(chan error, attempts)
+	for range attempts {
+		go func() { results <- repo.Consume(ctx, "token-under-load", window, limit) }()
+	}
+	var accepted, rejected int
+	for range attempts {
+		switch err := <-results; {
+		case err == nil:
+			accepted++
+		case errors.Is(err, agenttoken.ErrRateLimited):
+			rejected++
+		default:
+			t.Fatalf("Consume: unexpected error %v", err)
+		}
+	}
+	if accepted != limit {
+		t.Fatalf("accepted = %d, want %d (rejected %d)", accepted, limit, rejected)
+	}
+	if rejected != attempts-limit {
+		t.Fatalf("rejected = %d, want %d", rejected, attempts-limit)
 	}
 }

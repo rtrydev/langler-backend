@@ -13,6 +13,13 @@ consistent hash lookup, checks expiry, revocation, and route scope, consumes a
 token-specific minute counter, and updates `lastUsed` before allowing the call.
 Rate counters use the `expiresAtUnix` DynamoDB TTL attribute.
 
+Token records (both the owner-scoped and hash-lookup copies) also carry
+`expiresAtUnix`, set to the token's expiry plus a 30-day retention window, so an
+owner can still see a recently-expired token (and its `lastUsed` history) in
+their token list before the same table-wide TTL sweep removes both copies.
+Expiry itself is still enforced in-band on every `Authorize` call — the TTL
+sweep is best-effort cleanup, not the authorization check.
+
 The machine HTTP API is separate from the Cognito API and exposes only:
 
 - `GET /reference/vocab`, `GET /reference/grammar`, and

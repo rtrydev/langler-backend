@@ -20,19 +20,25 @@ type Repository struct {
 	table  string
 }
 
+// expiredTokenRetention keeps expired token records around long enough for an
+// owner to still see them (and their lastUsed history) in the token list
+// before the DynamoDB TTL sweep removes both copies of the item.
+const expiredTokenRetention = 30 * 24 * time.Hour
+
 type tokenItem struct {
-	PK        string   `dynamodbav:"PK"`
-	SK        string   `dynamodbav:"SK"`
-	TokenID   string   `dynamodbav:"tokenId"`
-	Owner     string   `dynamodbav:"owner"`
-	Label     string   `dynamodbav:"label"`
-	Scopes    []string `dynamodbav:"scopes"`
-	CreatedAt string   `dynamodbav:"createdAt"`
-	ExpiresAt string   `dynamodbav:"expiresAt"`
-	RevokedAt string   `dynamodbav:"revokedAt,omitempty"`
-	LastUsed  string   `dynamodbav:"lastUsed,omitempty"`
-	Suffix    string   `dynamodbav:"suffix"`
-	TokenHash string   `dynamodbav:"tokenHash"`
+	PK            string   `dynamodbav:"PK"`
+	SK            string   `dynamodbav:"SK"`
+	TokenID       string   `dynamodbav:"tokenId"`
+	Owner         string   `dynamodbav:"owner"`
+	Label         string   `dynamodbav:"label"`
+	Scopes        []string `dynamodbav:"scopes"`
+	CreatedAt     string   `dynamodbav:"createdAt"`
+	ExpiresAt     string   `dynamodbav:"expiresAt"`
+	ExpiresAtUnix int64    `dynamodbav:"expiresAtUnix"`
+	RevokedAt     string   `dynamodbav:"revokedAt,omitempty"`
+	LastUsed      string   `dynamodbav:"lastUsed,omitempty"`
+	Suffix        string   `dynamodbav:"suffix"`
+	TokenHash     string   `dynamodbav:"tokenHash"`
 }
 
 func NewRepository(client *dynamodb.Client, table string) (*Repository, error) {
@@ -190,7 +196,12 @@ func toItem(token agenttoken.Token, hash string, lookup bool) tokenItem {
 	for _, scope := range token.Scopes {
 		scopes = append(scopes, string(scope))
 	}
-	return tokenItem{PK: pk, SK: sk, TokenID: token.ID, Owner: token.Owner, Label: token.Label, Scopes: scopes, CreatedAt: token.CreatedAt.Format(time.RFC3339Nano), ExpiresAt: token.ExpiresAt.Format(time.RFC3339Nano), Suffix: token.Suffix, TokenHash: hash}
+	return tokenItem{
+		PK: pk, SK: sk, TokenID: token.ID, Owner: token.Owner, Label: token.Label, Scopes: scopes,
+		CreatedAt: token.CreatedAt.Format(time.RFC3339Nano), ExpiresAt: token.ExpiresAt.Format(time.RFC3339Nano),
+		ExpiresAtUnix: token.ExpiresAt.Add(expiredTokenRetention).Unix(),
+		Suffix:        token.Suffix, TokenHash: hash,
+	}
 }
 
 func (item tokenItem) toDomain() (agenttoken.Token, error) {

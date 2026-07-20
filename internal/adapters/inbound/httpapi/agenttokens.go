@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -114,7 +113,7 @@ func agentTokenError(ctx context.Context, err error) events.APIGatewayV2HTTPResp
 	case errors.Is(err, agenttoken.ErrAlreadyExists):
 		return errorJSON(http.StatusConflict, agenttoken.ErrAlreadyExists.Error())
 	default:
-		slog.ErrorContext(ctx, "agent token operation failed", "error", err)
+		loggerFrom(ctx).ErrorContext(ctx, "agent token operation failed", "error", err)
 		return errorJSON(http.StatusInternalServerError, "internal error")
 	}
 }

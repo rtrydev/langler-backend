@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -453,7 +452,7 @@ func lessonError(ctx context.Context, err error) events.APIGatewayV2HTTPResponse
 	case errors.Is(err, lesson.ErrInvalidOwner):
 		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
 	}
-	slog.ErrorContext(ctx, "lesson request failed", "error", err)
+	loggerFrom(ctx).ErrorContext(ctx, "lesson request failed", "error", err)
 	return errorJSON(http.StatusInternalServerError, "internal error")
 }
 

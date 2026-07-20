@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -229,7 +228,7 @@ func referenceError(ctx context.Context, err error) events.APIGatewayV2HTTPRespo
 			return errorJSON(http.StatusBadRequest, sentinel.Error())
 		}
 	}
-	slog.ErrorContext(ctx, "reference query failed", "error", err)
+	loggerFrom(ctx).ErrorContext(ctx, "reference query failed", "error", err)
 	return errorJSON(http.StatusInternalServerError, "internal error")
 }
 
