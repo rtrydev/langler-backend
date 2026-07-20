@@ -8,10 +8,10 @@ from collections import defaultdict
 from importlib import resources
 from pathlib import Path
 
+from . import topics
 from .sources import (
     CURATED_POLISH_GRAMMAR,
     CURATED_POLISH_ORTHOGRAPHY,
-    CURATED_POLISH_TOPICS,
     SOURCES,
 )
 
@@ -201,9 +201,7 @@ def build_vocab(
     ranks: dict[str, int],
     examples: PolishExampleIndex,
     band=wordfreq_band,
-    topic_data: dict | None = None,
 ) -> list[dict]:
-    topic_data = topic_data or load_topics()
     by_word: dict[str, dict] = {}
     for entry in entries:
         if entry.get("lang_code") not in {None, "pl"} or entry.get("lang") not in {None, "Polish"}:
@@ -230,7 +228,7 @@ def build_vocab(
             continue
         record = by_word.get(key)
         if record is None:
-            record = vocab_record(entry, word, glosses, frequency, examples.lookup(word), topic_data)
+            record = vocab_record(entry, word, glosses, frequency, examples.lookup(word))
             by_word[key] = record
         else:
             for gloss in glosses:
@@ -254,16 +252,20 @@ def usable_sense(sense: dict) -> bool:
     )
 
 
-def vocab_record(entry: dict, word: str, glosses: list[str], frequency: int, example: dict | None, topic_data: dict) -> dict:
+def word_id(word: str, pos: str) -> str:
+    return "pl-" + hashlib.sha1(f"{word.casefold()}|{pos}".encode()).hexdigest()[:16]
+
+
+def vocab_record(entry: dict, word: str, glosses: list[str], frequency: int, example: dict | None) -> dict:
     source = SOURCES["kaikki-pl"]
     nkjp = SOURCES["nkjp-frequency"]
     freq = SOURCES["wordfreq"]
-    stable = hashlib.sha1(f"{word.casefold()}|{entry.get('pos', '')}".encode()).hexdigest()[:16]
+    stable = word_id(word, str(entry.get("pos", "")))
     level = cefr_for_band(frequency)
     pos = _POS.get(str(entry.get("pos", "")), str(entry.get("pos", "")))
     record = {
         "PK": "REF#pl",
-        "SK": f"VOCAB#{level}#pl-{stable}",
+        "SK": f"VOCAB#{level}#{stable}",
         "lang": "pl",
         "headword": word,
         "reading": word,
@@ -272,7 +274,6 @@ def vocab_record(entry: dict, word: str, glosses: list[str], frequency: int, exa
         "level": level,
         "levelApproximate": True,
         "freqBand": frequency,
-        "topics": classify_topics(glosses, topic_data),
         "sourceId": source.id,
         "license": source.license,
         "attribution": {
@@ -289,46 +290,15 @@ def vocab_record(entry: dict, word: str, glosses: list[str], frequency: int, exa
 
 
 def load_topics() -> dict:
-    return json.loads(resources.files("langler_etl.data").joinpath("topics_pl.json").read_text("utf-8"))
-
-
-def classify_topics(glosses: list[str], data: dict) -> list[str]:
-    text = " ".join(glosses).casefold()
-    matches = []
-    for topic in data["topics"]:
-        if any(keyword.casefold() in text for keyword in topic["keywords"]):
-            matches.append(topic["slug"])
-    return matches[:3] or ["everyday-life"]
+    return topics.load_topics("pl")
 
 
 def topic_records(vocab: list[dict], data: dict | None = None) -> list[dict]:
-    data = data or load_topics()
-    meta = {topic["slug"]: topic for topic in data["topics"]}
-    members: dict[tuple[str, str], list[str]] = defaultdict(list)
-    for record in vocab:
-        for slug in record["topics"]:
-            members[(record["level"], slug)].append(record["SK"].removeprefix("VOCAB#"))
-    source = CURATED_POLISH_TOPICS
-    return [
-        {
-            "PK": "REF#pl",
-            "SK": f"TOPIC#{level}#{slug}",
-            "lang": "pl",
-            "slug": slug,
-            "name": meta[slug]["name"],
-            "description": meta[slug]["description"],
-            "level": level,
-            "keywords": meta[slug]["keywords"],
-            "vocabIds": ids,
-            "sourceId": source.id,
-            "license": source.license,
-        }
-        for (level, slug), ids in sorted(members.items())
-    ]
+    return topics.topic_records(vocab, data or load_topics(), "pl")
 
 
 def grammar_records(evidence_sentences: list[str] | None = None, analyzer=None) -> list[dict]:
-    topics = json.loads(resources.files("langler_etl.data").joinpath("grammar_pl.json").read_text("utf-8"))
+    grammar_topics = json.loads(resources.files("langler_etl.data").joinpath("grammar_pl.json").read_text("utf-8"))
     inventory = SOURCES["certyfikat-polish"]
     evidence_source = SOURCES["nkjp-1m"]
     morphology_source = SOURCES["morfeusz-sgjp"]
@@ -337,7 +307,7 @@ def grammar_records(evidence_sentences: list[str] | None = None, analyzer=None) 
 
         analyzer = morfeusz2.Morfeusz()
     records = []
-    for topic in topics:
+    for topic in grammar_topics:
         validation = morphology_validation(topic["example"]["text"], analyzer)
         record = {
             "PK": "REF#pl",

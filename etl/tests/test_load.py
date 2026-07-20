@@ -17,13 +17,23 @@ class FakeBatchWriter:
     def put_item(self, Item):
         self.items.append(Item)
 
+    def delete_item(self, Key):
+        self.deleted.append(Key)
+
 
 class FakeTable:
-    def __init__(self):
+    def __init__(self, pages=None):
         self.writer = FakeBatchWriter()
+        self.writer.deleted = []
+        self.pages = pages or []
+        self.queries = []
 
     def batch_writer(self):
         return self.writer
+
+    def query(self, **kwargs):
+        self.queries.append(kwargs)
+        return self.pages[len(self.queries) - 1]
 
 
 class FakeS3:
@@ -90,3 +100,52 @@ def test_sync_embeddings_filters_by_language(tmp_path):
     assert s3.calls[0]["Key"] == "embeddings/pl-vocab.embed"
     assert s3.calls[0]["Body"] == b"pl"
     assert s3.calls[0]["CacheControl"] == "public, max-age=300, must-revalidate"
+
+
+def _topics_dir(tmp_path, keys):
+    ref = tmp_path / "reference" / "ja"
+    ref.mkdir(parents=True)
+    (ref / "topics.jsonl").write_text(
+        "".join(json.dumps({"SK": key}) + "\n" for key in keys), encoding="utf-8"
+    )
+    return ref
+
+
+def test_prune_topics_deletes_only_keys_absent_from_the_build(tmp_path):
+    ref = _topics_dir(tmp_path, ["TOPIC#N5#food-dining", "TOPIC#N5#home-housing"])
+    table = FakeTable(pages=[{
+        "Items": [
+            {"SK": "TOPIC#N5#food-dining"},
+            {"SK": "TOPIC#N5#abstract-concepts"},
+            {"SK": "TOPIC#N4#daily-life"},
+        ]
+    }])
+
+    pruned = load.prune_topics(table, "ja", ref, write_rate=100000)
+
+    assert pruned == 2
+    assert table.writer.deleted == [
+        {"PK": "REF#ja", "SK": "TOPIC#N5#abstract-concepts"},
+        {"PK": "REF#ja", "SK": "TOPIC#N4#daily-life"},
+    ]
+
+
+def test_prune_topics_follows_query_pagination(tmp_path):
+    ref = _topics_dir(tmp_path, ["TOPIC#N5#food-dining"])
+    table = FakeTable(pages=[
+        {"Items": [{"SK": "TOPIC#N5#stale-one"}], "LastEvaluatedKey": {"SK": "TOPIC#N5#stale-one"}},
+        {"Items": [{"SK": "TOPIC#N5#food-dining"}, {"SK": "TOPIC#N5#stale-two"}]},
+    ])
+
+    assert load.prune_topics(table, "ja", ref, write_rate=100000) == 2
+    assert len(table.queries) == 2
+    assert "ExclusiveStartKey" in table.queries[1]
+
+
+def test_prune_topics_skips_when_no_topics_were_built(tmp_path):
+    ref = tmp_path / "reference" / "ja"
+    ref.mkdir(parents=True)
+    table = FakeTable()
+
+    assert load.prune_topics(table, "ja", ref, write_rate=100000) == 0
+    assert table.queries == []

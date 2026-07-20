@@ -38,7 +38,7 @@ func TestHandleVocab(t *testing.T) {
 	resp, err := h.Handle(context.Background(), getRequest("/reference/vocab", map[string]string{
 		"lang":   "ja",
 		"level":  "N5",
-		"topic":  "daily-life",
+		"topic":  "daily-routines",
 		"limit":  "25",
 		"cursor": "abc",
 	}))
@@ -49,7 +49,7 @@ func TestHandleVocab(t *testing.T) {
 		t.Fatalf("StatusCode = %d, body %s", resp.StatusCode, resp.Body)
 	}
 
-	wantQuery := inbound.VocabQuery{Language: "ja", Level: "N5", Topic: "daily-life", Limit: 25, Cursor: "abc"}
+	wantQuery := inbound.VocabQuery{Language: "ja", Level: "N5", Topic: "daily-routines", Limit: 25, Cursor: "abc"}
 	if provider.vocabQuery != wantQuery {
 		t.Errorf("query = %+v, want %+v", provider.vocabQuery, wantQuery)
 	}

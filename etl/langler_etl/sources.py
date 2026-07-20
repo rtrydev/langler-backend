@@ -98,12 +98,6 @@ _ALL = [
         attribution="Kaikki.org Burmese dictionary; Wiktionary contributors; Wiktextract by Tatu Ylonen",
     ),
     Source(
-        id="myg2p-headwords",
-        url="https://github.com/ye-kyaw-thu/myG2P",
-        license="CC BY-NC-SA 4.0",
-        attribution="myG2P Burmese pronunciation lexicon by Ye Kyaw Thu",
-    ),
-    Source(
         id="myanmar-c4-frequency",
         url="https://huggingface.co/datasets/chuuhtetnaing/myanmar-c4-dataset",
         license="ODC-BY 1.0",

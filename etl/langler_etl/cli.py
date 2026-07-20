@@ -34,6 +34,13 @@ def main(argv=None) -> None:
     embed_cmd.add_argument("--model")
     embed_cmd.add_argument("--language", choices=("ja", "my", "pl"), default="ja")
 
+    curate_cmd = sub.add_parser(
+        "curate", help="write topic assignments from curated seed files, extending the uncurated tail"
+    )
+    curate_cmd.add_argument("--seed-dir", type=Path, required=True)
+    curate_cmd.add_argument("--out", type=Path, default=ETL_ROOT / ".build")
+    curate_cmd.add_argument("--language", choices=("ja", "my", "pl"), required=True)
+
     args = parser.parse_args(argv)
     if args.command == "download":
         from . import download
@@ -62,7 +69,7 @@ def main(argv=None) -> None:
     elif args.command == "load":
         from . import load
 
-        written, uploaded = load.run(
+        written, uploaded, pruned = load.run(
             args.table,
             args.assets_bucket,
             args.out,
@@ -70,7 +77,7 @@ def main(argv=None) -> None:
             args.language,
             args.kind,
         )
-        print(f"wrote {written} items, uploaded {uploaded} assets")
+        print(f"wrote {written} items, uploaded {uploaded} assets, pruned {pruned} stale topics")
     elif args.command == "embed":
         from . import embeddings
 
@@ -78,3 +85,16 @@ def main(argv=None) -> None:
             args.out, args.region, args.model or embeddings.MODEL_ID, args.language
         )
         print(f"wrote {path}")
+    elif args.command == "curate":
+        from . import curation
+
+        vocab_path = args.out / "reference" / args.language / "vocab.jsonl"
+        vocab = [json.loads(line) for line in vocab_path.open(encoding="utf-8") if line.strip()]
+        seed = curation.load_seed(args.seed_dir, args.language)
+        data_dir = Path(__file__).resolve().parent / "data"
+        summary = curation.curate(args.language, vocab, seed, data_dir)
+        print(json.dumps(summary | {"seeded": len(summary["seeded"])}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

@@ -15,9 +15,9 @@ import (
 
 func topicFixtures() []reference.Topic {
 	return []reference.Topic{
-		{Slug: "food-drink", Name: "Food & drink", Level: "N5", VocabIDs: []string{"N5#1", "N5#2", "N5#3", "N5#4"}},
+		{Slug: "food-dining", Name: "Food & dining", Level: "N5", VocabIDs: []string{"N5#1", "N5#2", "N5#3", "N5#4"}},
 		{Slug: "travel-transport", Name: "Travel & transport", Level: "N5", VocabIDs: []string{"N5#5", "N5#6"}},
-		{Slug: "nature-weather", Name: "Nature & weather", Level: "N4", VocabIDs: []string{"N4#7"}},
+		{Slug: "nature-animals", Name: "Nature & animals", Level: "N4", VocabIDs: []string{"N4#7"}},
 	}
 }
 
@@ -36,7 +36,7 @@ func TestTopicsReportsCoverageForLevel(t *testing.T) {
 		t.Fatalf("topics = %+v, want 2", result.Topics)
 	}
 	travel, food := result.Topics[0], result.Topics[1]
-	if travel.Slug != "travel-transport" || food.Slug != "food-drink" {
+	if travel.Slug != "travel-transport" || food.Slug != "food-dining" {
 		t.Fatalf("order = %q, %q; want least-covered first", travel.Slug, food.Slug)
 	}
 	if travel.WordCount != 2 || travel.CoveredCount != 1 {
@@ -45,7 +45,7 @@ func TestTopicsReportsCoverageForLevel(t *testing.T) {
 	if food.WordCount != 4 || food.CoveredCount != 3 {
 		t.Errorf("food counts = %d/%d, want 3/4", food.CoveredCount, food.WordCount)
 	}
-	if food.Name != "Food & drink" {
+	if food.Name != "Food & dining" {
 		t.Errorf("name = %q", food.Name)
 	}
 }
@@ -93,7 +93,7 @@ func TestBuildWithTopicSlugSelectsUncoveredTopicWords(t *testing.T) {
 	t.Parallel()
 
 	reader := &fakeReader{
-		topics: []reference.Topic{{Slug: "food-drink", Name: "Food & drink", Level: "N5", VocabIDs: []string{"N5#1", "N5#2", "N5#3"}}},
+		topics: []reference.Topic{{Slug: "food-dining", Name: "Food & dining", Level: "N5", VocabIDs: []string{"N5#1", "N5#2", "N5#3"}}},
 		byID: map[string]reference.VocabEntry{
 			"N5#1": {ID: "N5#1", Headword: "水", Reading: "みず", Gloss: []string{"water"}},
 			"N5#2": {ID: "N5#2", Headword: "魚", Reading: "さかな", Gloss: []string{"fish"}},
@@ -107,8 +107,8 @@ func TestBuildWithTopicSlugSelectsUncoveredTopicWords(t *testing.T) {
 		Owner:            "user-1",
 		Language:         "ja",
 		Level:            "N5",
-		Topic:            "Food & drink",
-		TopicSlug:        "food-drink",
+		Topic:            "Food & dining",
+		TopicSlug:        "food-dining",
 		ExerciseTypes:    []string{"cloze"},
 		IncludeReference: true,
 	})
@@ -215,7 +215,7 @@ func TestBuildFreeTextTopicMatchesCuratedTopic(t *testing.T) {
 	reader := &fakeReader{
 		topics: []reference.Topic{
 			{Slug: "travel-transport", Name: "Travel & transport", Level: "N5", Keywords: []string{"trip", "travel", "train"}, VocabIDs: []string{"N5#10", "N5#11"}},
-			{Slug: "food-drink", Name: "Food & drink", Level: "N5", Keywords: []string{"food", "eat"}, VocabIDs: []string{"N5#20"}},
+			{Slug: "food-dining", Name: "Food & dining", Level: "N5", Keywords: []string{"food", "eat"}, VocabIDs: []string{"N5#20"}},
 		},
 		byID: byID,
 	}
@@ -254,8 +254,8 @@ func TestBuildFreeTextTopicMergesTwoBestMatches(t *testing.T) {
 	reader := &fakeReader{
 		topics: []reference.Topic{
 			{Slug: "travel-transport", Level: "N5", Keywords: []string{"trip"}, VocabIDs: []string{"N5#10"}},
-			{Slug: "food-drink", Level: "N5", Keywords: []string{"restaurant", "eat"}, VocabIDs: []string{"N5#20"}},
-			{Slug: "nature-weather", Level: "N5", Keywords: []string{"dog"}, VocabIDs: []string{"N5#30"}},
+			{Slug: "food-dining", Level: "N5", Keywords: []string{"restaurant", "eat"}, VocabIDs: []string{"N5#20"}},
+			{Slug: "nature-animals", Level: "N5", Keywords: []string{"dog"}, VocabIDs: []string{"N5#30"}},
 		},
 		byID: byID,
 	}

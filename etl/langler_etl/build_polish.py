@@ -2,7 +2,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from . import polish
+from . import polish, topics
 from .build import _write_jsonl
 from .sources import REGISTRY
 
@@ -19,21 +19,21 @@ def build(data_dir: Path, out_dir: Path, band=polish.wordfreq_band, topic_data=N
         examples = polish.load_tatoeba(sentences, links, english if english.exists() else None)
 
     ranks = polish.load_frequency(data_dir / "nkjp-frequency.tsv")
-    topics = topic_data or polish.load_topics()
+    topic_definitions = topic_data or polish.load_topics()
     vocab = polish.build_vocab(
         polish.load_kaikki(data_dir / "kaikki-pl.jsonl"),
         ranks,
         examples,
         band=band,
-        topic_data=topics,
     )
+    topics.apply_topics(vocab, topic_definitions)
     nkjp_dir = data_dir / "nkjp-1m"
     nkjp_archive = data_dir / "NKJP-PodkorpusMilionowy-1.2.tar.gz"
     nkjp_path = nkjp_dir if nkjp_dir.exists() else nkjp_archive
     evidence = polish.load_nkjp_sentences(nkjp_path) if nkjp_path.exists() else []
     grammar = polish.grammar_records(evidence)
     scripts = polish.orthography_records()
-    topic_items = polish.topic_records(vocab, topics)
+    topic_items = polish.topic_records(vocab, topic_definitions)
 
     _write_jsonl(ref_dir / "vocab.jsonl", vocab)
     _write_jsonl(ref_dir / "grammar.jsonl", grammar)

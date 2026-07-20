@@ -83,7 +83,7 @@ func seedReferenceData(t *testing.T, client *dynamodb.Client, table string) {
 			"PK": "REF#ja", "SK": "VOCAB#N5#1000001", "lang": "ja",
 			"headword": "学校", "reading": "がっこう",
 			"gloss": []string{"school"}, "pos": []string{"n"},
-			"level": "N5", "freqBand": 2, "topics": []string{"daily-life"},
+			"level": "N5", "freqBand": 2, "topics": []string{"daily-routines"},
 			"example": map[string]any{
 				"text": "学校に行きます。", "translation": "I go to school.",
 				"sourceId": "tatoeba", "license": "CC BY 2.0 FR",
@@ -105,22 +105,22 @@ func seedReferenceData(t *testing.T, client *dynamodb.Client, table string) {
 			"sourceId": "jmdict-simplified", "license": "CC BY-SA 4.0 (EDRDG)",
 		},
 		{
-			"PK": "REF#ja", "SK": "TOPIC#N5#daily-life", "lang": "ja",
-			"slug": "daily-life", "name": "Daily life",
+			"PK": "REF#ja", "SK": "TOPIC#N5#daily-routines", "lang": "ja",
+			"slug": "daily-routines", "name": "Daily routines",
 			"description": "Everyday routines, actions, and common objects",
 			"level":       "N5", "vocabIds": []string{"N5#1000001"},
 			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
 		},
 		{
-			"PK": "REF#ja", "SK": "TOPIC#N5#nature-weather", "lang": "ja",
-			"slug": "nature-weather", "name": "Nature & weather",
+			"PK": "REF#ja", "SK": "TOPIC#N5#nature-animals", "lang": "ja",
+			"slug": "nature-animals", "name": "Nature & animals",
 			"description": "Weather, seasons, animals, plants, and landscapes",
 			"level":       "N5", "vocabIds": []string{"N5#1000002"},
 			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
 		},
 		{
-			"PK": "REF#ja", "SK": "TOPIC#N4#abstract-concepts", "lang": "ja",
-			"slug": "abstract-concepts", "name": "Abstract concepts",
+			"PK": "REF#ja", "SK": "TOPIC#N4#time-numbers", "lang": "ja",
+			"slug": "time-numbers", "name": "Time & numbers",
 			"description": "Ideas, change, degree, and ways of thinking",
 			"level":       "N4", "vocabIds": []string{"N4#1000003"},
 			"sourceId": "langler-curated", "license": "CC BY-SA 4.0",
@@ -220,7 +220,7 @@ func TestVocabQueries(t *testing.T) {
 	})
 
 	t.Run("topic filter", func(t *testing.T) {
-		page, err := repo.Vocab(ctx, outbound.VocabFilter{Language: "ja", Level: "N5", Topic: "daily-life", Limit: 10})
+		page, err := repo.Vocab(ctx, outbound.VocabFilter{Language: "ja", Level: "N5", Topic: "daily-routines", Limit: 10})
 		if err != nil {
 			t.Fatalf("Vocab: %v", err)
 		}
@@ -362,7 +362,7 @@ func TestTopicQueries(t *testing.T) {
 		if len(topics) != 2 {
 			t.Fatalf("topics = %+v, want 2", topics)
 		}
-		if topics[0].Slug != "daily-life" || topics[0].Name != "Daily life" || topics[0].Level != "N5" {
+		if topics[0].Slug != "daily-routines" || topics[0].Name != "Daily routines" || topics[0].Level != "N5" {
 			t.Errorf("topic = %+v", topics[0])
 		}
 		if len(topics[0].VocabIDs) != 1 || topics[0].VocabIDs[0] != "N5#1000001" {
@@ -371,11 +371,11 @@ func TestTopicQueries(t *testing.T) {
 	})
 
 	t.Run("slug scoped", func(t *testing.T) {
-		topics, err := repo.Topics(ctx, outbound.TopicFilter{Language: "ja", Level: "N5", Slug: "nature-weather"})
+		topics, err := repo.Topics(ctx, outbound.TopicFilter{Language: "ja", Level: "N5", Slug: "nature-animals"})
 		if err != nil {
 			t.Fatalf("Topics: %v", err)
 		}
-		if len(topics) != 1 || topics[0].Slug != "nature-weather" {
+		if len(topics) != 1 || topics[0].Slug != "nature-animals" {
 			t.Fatalf("topics = %+v", topics)
 		}
 	})
@@ -405,7 +405,7 @@ func TestVocabByIDs(t *testing.T) {
 	if entries[0].ID != "N4#1000003" || entries[1].ID != "N5#1000001" {
 		t.Errorf("order = %q, %q; want input order", entries[0].ID, entries[1].ID)
 	}
-	if entries[1].Headword != "学校" || entries[1].Topics[0] != "daily-life" {
+	if entries[1].Headword != "学校" || entries[1].Topics[0] != "daily-routines" {
 		t.Errorf("entry = %+v", entries[1])
 	}
 }

@@ -27,7 +27,6 @@ an overwrite in place.
 | Morfeusz 2 with SGJP data | https://morfeusz.sgjp.pl/ | BSD-2-Clause | Institute of Computer Science PAS and SGJP authors |
 | Polish grammar, topics, and orthography notes | `langler_etl/data/{grammar,topics,orthography}_pl.json` | CC BY-SA 4.0 / CC0 | Langler project, hand-reviewed original wording mapped to the certification curriculum |
 | Kaikki Burmese / Wiktextract | https://kaikki.org/dictionary/Burmese/ | CC BY-SA 4.0 + GFDL | Kaikki.org, Wiktionary contributors, Tatu Ylonen |
-| myG2P headwords | https://github.com/ye-kyaw-thu/myG2P | CC BY-NC-SA 4.0 | Ye Kyaw Thu |
 | Myanmar-C4 frequency lexicon | https://huggingface.co/datasets/chuuhtetnaing/myanmar-c4-dataset | ODC-BY 1.0 | C4 counts prepared by the myanmar-ime corpus builder |
 | myWord n-grams | https://github.com/ye-kyaw-thu/myWord | GPL-3.0 | Ye Kyaw Thu; pruned client segmentation asset |
 | Burmese grammar, topics, and script inventory | `langler_etl/data/{grammar,topics,script}_my.json` | CC BY-SA 4.0 / CC0 | Langler project, hand-reviewed A1–B1 grammar and myanmar-ime-aligned romanization |
@@ -60,7 +59,14 @@ langler-etl load --language ja --table <table> --assets-bucket <bucket>
 langler-etl load --language pl --table <table> --assets-bucket <bucket>
 langler-etl load --language my --table <table> --assets-bucket <bucket>
 langler-etl load --language pl --kind grammar --table <table>
+langler-etl embed --language ja      # build .build/embeddings/<lang>-vocab.embed via Bedrock
+langler-etl embed --language pl
+langler-etl embed --language my
 ```
+
+All three languages are wired to a semantic index in `embeddings_urls`; a
+language whose `.embed` object is missing from the bucket silently falls back to
+keyword topic matching, so run `embed` before `load` whenever vocabulary changes.
 
 Use `--language pl` on `download`, `build`, or `embed` for Polish, or
 `--language all` on `download` and `build`. The Polish download fetches the
@@ -74,7 +80,7 @@ Polish grammar topics are stored only at their first certification level, valida
 against Morfeusz during the build, and served cumulatively through the requested CEFR
 level.
 
-For Burmese, `download --language my` fetches Kaikki and myG2P v2. Copy the myanmar-ime
+For Burmese, `download --language my` fetches the Kaikki dictionary. Copy the myanmar-ime
 `BurmeseLexiconSource.tsv` corpus-builder artifact and myangler-web `ngram.json`
 into `.data/` before building. Every string passes through `myanmar-tools`
 Zawgyi detection, conversion when needed, and NFC cleanup. The full n-gram model
@@ -103,8 +109,33 @@ at least 80% frequency-lexicon coverage and labels their difficulty approximate.
 
 Required AWS permissions for `load`:
 
-- `dynamodb:BatchWriteItem` and `dynamodb:PutItem` on the target table
+- `dynamodb:BatchWriteItem`, `dynamodb:PutItem`, and `dynamodb:Query` on the
+  target table — `load` queries the `TOPIC#` prefix of each language partition and
+  deletes items the current build no longer produces, so a renamed or removed topic
+  slug does not linger as a duplicate chip
 - `s3:PutObject` on `arn:aws:s3:::<assets-bucket>/kanjivg/*` (only when
   `--assets-bucket` is given), plus `arn:aws:s3:::<assets-bucket>/{burmese,embeddings}/*`
 
 Credentials come from the standard AWS SDK chain (`AWS_PROFILE`, environment, SSO).
+
+## Lesson topics
+
+Each language ships a curated topic taxonomy in `langler_etl/data/topics_<lang>.json`:
+a shared core of 22 course-book units (greetings, family, food, transport, and so on)
+plus one language-specific unit — `politeness-keigo` for Japanese, `arts-literature`
+for Polish, `farming-rural` for Burmese. There is deliberately no catch-all bucket;
+`topics.apply_topics` fails the build when a word has no assignment, when a slug is
+unknown, or when any single topic holds more than `MAX_TOPIC_SHARE` of the lexicon.
+
+Assignments are per word, not keyword-matched. `curate` takes a directory of
+reviewed seed files named `<lang>-*.json` (each a `{wordId: [slug, ...]}` object),
+keeps every seeded assignment verbatim, and extends the uncurated tail with a
+naive-Bayes classifier trained on the seed plus each topic's keywords:
+
+```sh
+langler-etl curate --language pl --seed-dir <dir>
+```
+
+It rewrites `topics_<lang>.json` with the merged assignments and a `curation` block
+recording which ids were human-curated, so the rule-extended tail can be regenerated
+without re-running the curation pass.

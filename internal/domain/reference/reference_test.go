@@ -112,7 +112,7 @@ func TestNewTopicTag(t *testing.T) {
 		wantErr error
 	}{
 		{name: "simple", value: "food", want: "food"},
-		{name: "kebab", value: "daily-life", want: "daily-life"},
+		{name: "kebab", value: "daily-routines", want: "daily-routines"},
 		{name: "empty", value: "", wantErr: reference.ErrInvalidTopic},
 		{name: "leading hyphen", value: "-food", wantErr: reference.ErrInvalidTopic},
 		{name: "uppercase", value: "Food", wantErr: reference.ErrInvalidTopic},

@@ -105,12 +105,12 @@ All routes require the Cognito JWT authorizer; the owner is the token's `sub`.
   with their reference ids is embedded. The slice prefers items the owner has
   no SRS record for yet, so repeated prompts walk the level instead of
   repeating the first page. When `topicSlug` names a curated topic
-  (`TOPIC#<level>#<slug>` reference items, e.g. `food-drink`), the vocab slice
+  (`TOPIC#<level>#<slug>` reference items, e.g. `food-dining`), the vocab slice
   is drawn from that topic's word list instead of the whole level; an unknown
   slug for the level is a `400` validation error. A free-text `topic` without
   a slug is resolved semantically first: the topic text is embedded with
   Bedrock (`EMBED_MODEL_ID`, cohere.embed-multilingual-v3 in prod — works for
-  Japanese and Polish input too) and matched by cosine similarity against the
+  Japanese, Polish, and Burmese input too) and matched by cosine similarity against the
   language's precomputed vocabulary embedding index (`EMBEDDINGS_URLS`, built by
   `langler-etl embed` and served from the reference-assets CDN). If Bedrock or
   the index is unavailable it falls back to keyword matching against the

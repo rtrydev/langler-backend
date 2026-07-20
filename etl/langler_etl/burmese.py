@@ -6,10 +6,10 @@ from collections import defaultdict
 from importlib import resources
 from pathlib import Path
 
+from . import topics
 from .sources import (
     CURATED_BURMESE_GRAMMAR,
     CURATED_BURMESE_SCRIPT,
-    CURATED_BURMESE_TOPICS,
     SOURCES,
 )
 
@@ -106,21 +106,6 @@ def load_frequency_lexicon(path: Path, detector=None) -> dict[str, dict]:
     return rows
 
 
-def load_myg2p(path: Path, detector=None) -> set[str]:
-    headwords = set()
-    with path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, 1):
-            if not line.strip() or line.startswith("#"):
-                continue
-            fields = line.rstrip("\n").split("\t")
-            if len(fields) < 2:
-                raise ValueError(f"invalid myG2P row at line {line_number}")
-            word = normalize_text(fields[1], detector)
-            if word and _MYANMAR.fullmatch(word):
-                headwords.add(word)
-    return headwords
-
-
 def level_for_rank(rank: int, total: int) -> str:
     percentile = rank / max(total, 1)
     if percentile <= 0.02:
@@ -136,8 +121,7 @@ def level_for_rank(rank: int, total: int) -> str:
     return "C2"
 
 
-def build_vocab(entries, frequency: dict[str, dict], myg2p_headwords=None, topic_data=None, detector=None) -> list[dict]:
-    topics = topic_data or load_topics()
+def build_vocab(entries, frequency: dict[str, dict], detector=None) -> list[dict]:
     source = SOURCES["kaikki-my"]
     freq_source = SOURCES["myanmar-c4-frequency"]
     ordered = sorted(frequency, key=lambda word: (-frequency[word]["frequency"], word))
@@ -157,31 +141,30 @@ def build_vocab(entries, frequency: dict[str, dict], myg2p_headwords=None, topic
         record = by_word.get(word)
         if record is None:
             stats = frequency.get(word, {"frequency": 0, "reading": ""})
-            record = vocab_record(entry, word, glosses, stats, ranks.get(word, len(ranks) + 1), len(ranks), topics, detector)
+            record = vocab_record(entry, word, glosses, stats, ranks.get(word, len(ranks) + 1), len(ranks), detector)
             by_word[word] = record
         else:
             record["gloss"] = list(dict.fromkeys([*record["gloss"], *glosses]))[:5]
             pos = str(entry.get("pos", "")).strip()
             if pos and pos not in record["pos"]:
                 record["pos"].append(pos)
-    for word in sorted(myg2p_headwords or set(), key=lambda item: (ranks.get(item, len(ranks) + 1), item)):
-        if word not in by_word:
-            stats = frequency.get(word, {"frequency": 0, "reading": ""})
-            by_word[word] = vocab_record({}, word, [], stats, ranks.get(word, len(ranks) + 1), len(ranks), topics, detector)
-    return sorted(by_word.values(), key=lambda item: (LEVELS.index(item["level"]), item["freqBand"], item["headword"]))
+    glossed = [record for record in by_word.values() if record["gloss"]]
+    return sorted(glossed, key=lambda item: (LEVELS.index(item["level"]), item["freqBand"], item["headword"]))
 
 
-def vocab_record(entry: dict, word: str, glosses: list[str], frequency: dict, rank: int, total: int, topics: dict, detector=None) -> dict:
-    dictionary = SOURCES["kaikki-my"]
-    headwords = SOURCES["myg2p-headwords"]
+def word_id(word: str) -> str:
+    return "my-" + hashlib.sha1(word.encode()).hexdigest()[:16]
+
+
+def vocab_record(entry: dict, word: str, glosses: list[str], frequency: dict, rank: int, total: int, detector=None) -> dict:
+    source = SOURCES["kaikki-my"]
     freq_source = SOURCES["myanmar-c4-frequency"]
     level = level_for_rank(rank, total)
-    stable = hashlib.sha1(word.encode()).hexdigest()[:16]
+    stable = word_id(word)
     reading = normalize_text(frequency.get("reading") or entry_reading(entry), detector)
-    source = dictionary if entry else headwords
     record = {
         "PK": "REF#my",
-        "SK": f"VOCAB#{level}#my-{stable}",
+        "SK": f"VOCAB#{level}#{stable}",
         "lang": "my",
         "headword": word,
         "reading": reading,
@@ -190,7 +173,6 @@ def vocab_record(entry: dict, word: str, glosses: list[str], frequency: dict, ra
         "level": level,
         "levelApproximate": True,
         "freqBand": LEVELS.index(level) + 1,
-        "topics": classify_topics(glosses, topics),
         "sourceId": source.id,
         "license": source.license,
         "attribution": {
@@ -200,7 +182,7 @@ def vocab_record(entry: dict, word: str, glosses: list[str], frequency: dict, ra
     }
     example = entry_example(entry, detector)
     if example:
-        record["example"] = {**example, "sourceId": dictionary.id, "license": dictionary.license}
+        record["example"] = {**example, "sourceId": source.id, "license": source.license}
     return record
 
 
@@ -222,32 +204,15 @@ def entry_example(entry: dict, detector=None) -> dict | None:
 
 
 def load_topics() -> dict:
-    return json.loads(resources.files("langler_etl.data").joinpath("topics_my.json").read_text("utf-8"))
-
-
-def classify_topics(glosses: list[str], data: dict) -> list[str]:
-    text = " ".join(glosses).casefold()
-    matches = [topic["slug"] for topic in data["topics"] if any(keyword in text for keyword in topic["keywords"])]
-    return matches[:3] or ["everyday-life"]
+    return topics.load_topics("my")
 
 
 def topic_records(vocab: list[dict], data=None) -> list[dict]:
-    data = data or load_topics()
-    meta = {topic["slug"]: topic for topic in data["topics"]}
-    members = defaultdict(list)
-    for record in vocab:
-        for slug in record["topics"]:
-            members[(record["level"], slug)].append(record["SK"].removeprefix("VOCAB#"))
-    return [{
-        "PK": "REF#my", "SK": f"TOPIC#{level}#{slug}", "lang": "my",
-        "slug": slug, "name": meta[slug]["name"], "description": meta[slug]["description"],
-        "level": level, "keywords": meta[slug]["keywords"], "vocabIds": ids[:5000],
-        "sourceId": CURATED_BURMESE_TOPICS.id, "license": CURATED_BURMESE_TOPICS.license,
-    } for (level, slug), ids in sorted(members.items())]
+    return topics.topic_records(vocab, data or load_topics(), "my")
 
 
 def grammar_records(detector=None) -> list[dict]:
-    topics = json.loads(resources.files("langler_etl.data").joinpath("grammar_my.json").read_text("utf-8"))
+    grammar_topics = json.loads(resources.files("langler_etl.data").joinpath("grammar_my.json").read_text("utf-8"))
     return [{
         "PK": "REF#my", "SK": f"GRAMMAR#{topic['level']}#{topic['topicId']}", "lang": "my",
         "topicId": topic["topicId"], "name": topic["name"], "level": topic["level"],
@@ -259,7 +224,7 @@ def grammar_records(detector=None) -> list[dict]:
             "sourceId": CURATED_BURMESE_GRAMMAR.id, "license": CURATED_BURMESE_GRAMMAR.license,
         },
         "sourceId": CURATED_BURMESE_GRAMMAR.id, "license": CURATED_BURMESE_GRAMMAR.license,
-    } for topic in topics]
+    } for topic in grammar_topics]
 
 
 def script_records() -> list[dict]:

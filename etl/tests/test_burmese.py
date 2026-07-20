@@ -28,33 +28,26 @@ def test_frequency_bands_are_approximate_cefr():
     ]
 
 
-def test_build_vocab_keeps_frequency_headwords_without_glosses():
-    entries = [{
-        "word": "ကျောင်း",
-        "lang_code": "my",
-        "pos": "noun",
-        "forms": [{"form": "kyaung:", "tags": ["romanization"]}],
-        "senses": [{"glosses": ["school"], "examples": [{"text": "ေက်ာင္း", "translation": "school"}]}],
-    }]
+def test_build_vocab_drops_words_without_glosses():
+    entries = [
+        {
+            "word": "ကျောင်း",
+            "lang_code": "my",
+            "pos": "noun",
+            "forms": [{"form": "kyaung:", "tags": ["romanization"]}],
+            "senses": [{"glosses": ["school"], "examples": [{"text": "ေက်ာင္း", "translation": "school"}]}],
+        },
+        {"word": "သွား", "lang_code": "my", "pos": "verb", "senses": [{"glosses": []}]},
+    ]
     frequency = {
         "ကျောင်း": {"frequency": 100, "reading": "kyaung:"},
+        "သွား": {"frequency": 90, "reading": "thwa:"},
     }
-    records = burmese.build_vocab(entries, frequency, {"သွား"}, detector=ZawgyiOnlyDetector())
-    assert len(records) == 2
-    glossed = next(item for item in records if item["headword"] == "ကျောင်း")
-    assert glossed["gloss"] == ["school"]
-    assert glossed["example"]["text"] == "ကျောင်း"
-    unglossed = next(item for item in records if item["headword"] == "သွား")
-    assert unglossed["sourceId"] == "myg2p-headwords"
-    assert unglossed["gloss"] == []
-    assert unglossed["level"] == "C2"
+    records = burmese.build_vocab(entries, frequency, detector=ZawgyiOnlyDetector())
+    assert [item["headword"] for item in records] == ["ကျောင်း"]
+    assert records[0]["gloss"] == ["school"]
+    assert records[0]["example"]["text"] == "ကျောင်း"
     assert all(item["levelApproximate"] for item in records)
-
-
-def test_load_myg2p_reads_headword_column(tmp_path):
-    source = tmp_path / "myg2p.txt"
-    source.write_text("19663\tသုတ\tသု တ\tthu. ta.\tθṵ ta̰\n")
-    assert burmese.load_myg2p(source, Detector()) == {"သုတ"}
 
 
 def test_grammar_inventory_covers_a1_through_b1():
@@ -102,7 +95,7 @@ def test_pruned_ngram_only_keeps_selected_burmese_vocabulary():
 
 
 def test_topic_records_stay_within_dynamodb_item_size():
-    vocab = [{"SK": f"VOCAB#C2#my-{index:016d}", "level": "C2", "topics": ["everyday-life"]} for index in range(20_000)]
+    vocab = [{"SK": f"VOCAB#C2#my-{index:016d}", "level": "C2", "topics": ["food-dining"]} for index in range(20_000)]
     records = burmese.topic_records(vocab)
     assert len(records[0]["vocabIds"]) == 5000
     assert len(json.dumps(records[0], ensure_ascii=False).encode()) < 400_000

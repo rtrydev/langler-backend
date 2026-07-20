@@ -147,8 +147,18 @@ def test_build_polish_writes_reference_partition(tmp_path):
         "".join(f"{index}\t{entry['word']}\n" for index, entry in enumerate(entries, 1)),
         encoding="utf-8",
     )
+    topic_data = {
+        "topics": [
+            {"slug": "food-dining", "name": "Food & dining", "description": "Meals", "keywords": ["food"]},
+            {"slug": "home-housing", "name": "Home & housing", "description": "Houses", "keywords": ["house"]},
+        ],
+        "assignments": {
+            polish.word_id(entry["word"], entry["pos"]): ["food-dining" if index % 2 else "home-housing"]
+            for index, entry in enumerate(entries)
+        },
+    }
     values = iter([1] * 4 + [2] * 4 + [3] * 4 + [5] * 4 + [6] * 4 + [8] * 4)
-    manifest = build_polish.build(data, output, band=lambda word: next(values))
+    manifest = build_polish.build(data, output, band=lambda word: next(values), topic_data=topic_data)
 
     ref = output / "reference" / "pl"
     assert {path.name for path in ref.glob("*.jsonl")} == {

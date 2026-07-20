@@ -78,11 +78,11 @@ func TestVocabValidatesAndDelegates(t *testing.T) {
 		},
 		{
 			name:  "level normalized and topic passed",
-			query: inbound.VocabQuery{Language: "ja", Level: "n5", Topic: "daily-life", Limit: 10, Cursor: "abc"},
+			query: inbound.VocabQuery{Language: "ja", Level: "n5", Topic: "daily-routines", Limit: 10, Cursor: "abc"},
 			wantFilter: outbound.VocabFilter{
 				Language: "ja",
 				Level:    "N5",
-				Topic:    "daily-life",
+				Topic:    "daily-routines",
 				Limit:    10,
 				Cursor:   "abc",
 			},

@@ -367,7 +367,7 @@ func TestLessonTopicsReturnsSuggestions(t *testing.T) {
 	t.Parallel()
 
 	advisor := &fakeLessonTopicAdvisor{result: inbound.LessonTopicsResult{Topics: []inbound.LessonTopic{
-		{Slug: "food-drink", Name: "Food & drink", Description: "Meals and cooking", WordCount: 41, CoveredCount: 12},
+		{Slug: "food-dining", Name: "Food & dining", Description: "Meals and cooking", WordCount: 41, CoveredCount: 12},
 	}}}
 	h, err := httpapi.NewHandler(fakeStatusProvider{}, &fakeReferenceProvider{}, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{}, advisor, &fakeLessonResultRecorder{}, &fakeProgressProvider{}, &fakeAgentTokenManager{}, &fakeAssessmentProvider{})
 	if err != nil {
@@ -394,7 +394,7 @@ func TestLessonTopicsReturnsSuggestions(t *testing.T) {
 	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(body.Topics) != 1 || body.Topics[0].Slug != "food-drink" || body.Topics[0].WordCount != 41 || body.Topics[0].CoveredCount != 12 {
+	if len(body.Topics) != 1 || body.Topics[0].Slug != "food-dining" || body.Topics[0].WordCount != 41 || body.Topics[0].CoveredCount != 12 {
 		t.Fatalf("body = %s", resp.Body)
 	}
 }
@@ -414,12 +414,12 @@ func TestLessonPromptForwardsOwnerAndTopicSlug(t *testing.T) {
 
 	prompts := &fakeLessonPromptBuilder{result: inbound.LessonPrompt{Prompt: "PROMPT"}}
 	h := newLessonHandler(t, &fakeLessonImporter{}, &fakeLessonLibrary{}, prompts)
-	body := `{"language":"ja","level":"N5","topic":"Food & drink","topicSlug":"food-drink","exerciseTypes":["cloze"]}`
+	body := `{"language":"ja","level":"N5","topic":"Food & dining","topicSlug":"food-dining","exerciseTypes":["cloze"]}`
 	resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodPost, "/lessons/prompt", "user-1", body))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, resp.Body)
 	}
-	if prompts.query.Owner != "user-1" || prompts.query.TopicSlug != "food-drink" {
+	if prompts.query.Owner != "user-1" || prompts.query.TopicSlug != "food-dining" {
 		t.Fatalf("query = %+v", prompts.query)
 	}
 }

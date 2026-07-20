@@ -85,16 +85,22 @@ remain exact-level queries.
 ## Topic catalog item
 
 `SK = TOPIC#<level>#<slug>`, one item per (level, topic) pair, aggregated by the
-ETL from the per-word `topics` tags in `langler_etl/data/topics_ja.json`
-(18-slug curated taxonomy; every built vocab word carries 1–3 slugs, enforced
-at build time).
+ETL from the per-word `topics` tags in `langler_etl/data/topics_<lang>.json`.
+All three languages share a 22-slug core taxonomy of course-book units and add one
+language-specific slug, so a topic means the same thing in every language. Every
+built vocab word carries 1–3 slugs, enforced at build time: the build fails on an
+unassigned word, an unknown slug, or any topic holding more than a quarter of the
+lexicon. There is deliberately no catch-all topic.
+
+Loading a language deletes `TOPIC#` items the current build no longer produces, so
+a renamed or retired slug does not survive as a duplicate chip.
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `slug` | S | Taxonomy slug (`food-drink`) |
-| `name` | S | Display name (`Food & drink`) |
+| `slug` | S | Taxonomy slug (`food-dining`) |
+| `name` | S | Display name (`Food & dining`) |
 | `description` | S | One-line learner-facing description |
-| `level` | S | JLPT band |
+| `level` | S | JLPT or CEFR band |
 | `keywords` | L of S | Lowercase English keywords used to match free-text lesson topics to this topic |
 | `vocabIds` | L of S | Reference ids (`N5#1234567`) of the level's words tagged with this topic |
 

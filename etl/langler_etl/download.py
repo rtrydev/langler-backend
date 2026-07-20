@@ -13,7 +13,6 @@ from .sources import SOURCES, Source
 USER_AGENT = "langler-etl (language-learning reference data pipeline)"
 JLPT_LEVELS = ["n5", "n4", "n3", "n2", "n1"]
 JLPT_CSV_URL = "https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/{level}.csv"
-MYG2P_URL = "https://raw.githubusercontent.com/ye-kyaw-thu/myG2P/master/ver2/myg2p.ver2.0.txt"
 
 
 def fetch(url: str) -> bytes:
@@ -99,11 +98,6 @@ def download_burmese(data_dir: Path) -> dict:
         print(f"downloading {url}")
         target.write_bytes(gzip.decompress(fetch(url)))
         resolved["kaikki-my"] = url
-    myg2p = data_dir / "myg2p.ver2.0.txt"
-    if not _skip(myg2p):
-        print(f"downloading {MYG2P_URL}")
-        myg2p.write_bytes(fetch(MYG2P_URL))
-        resolved["myg2p-headwords"] = MYG2P_URL
     resolved_path.write_text(json.dumps(resolved, indent=2) + "\n")
     return resolved
 
