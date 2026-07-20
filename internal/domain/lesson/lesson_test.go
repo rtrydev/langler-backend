@@ -485,6 +485,78 @@ func TestNewRejectsInvalidPolishOrthographyAnswer(t *testing.T) {
 	}
 }
 
+func TestNewAcceptsPolishConnectedLessonWithStory(t *testing.T) {
+	t.Parallel()
+
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00",
+		Language:      "pl",
+		Level:         "A2",
+		Title:         "Weekend w Krakowie",
+		ReadingStage:  lesson.StageConnected,
+		Exercises: []lesson.Exercise{
+			{
+				ID: "story", Type: lesson.TypeReading, Points: 6,
+				Reading: &lesson.Reading{
+					Genre:   lesson.GenreShortStory,
+					Title:   "Weekend w Krakowie",
+					Passage: "W zeszły weekend pojechałam z przyjaciółką do Krakowa. Zwiedziłyśmy stare miasto i piłyśmy kawę na rynku.",
+					Annotations: []lesson.Annotation{
+						{Surface: "Kraków", Reading: "", Gloss: "Krakow"},
+					},
+					Questions: []lesson.Question{
+						{
+							Question: "Dokąd pojechała autorka?",
+							Kind:     lesson.KindMultipleChoice,
+							Options:  []string{"do Krakowa", "do Warszawy"},
+							Answer:   "do Krakowa",
+						},
+					},
+				},
+			},
+			{
+				ID: "cloze-1", Type: lesson.TypeCloze, Points: 4,
+				Cloze: &lesson.Cloze{
+					Text:   "W zeszły {{1}} pojechałam do Krakowa.",
+					Blanks: []lesson.Blank{{Index: 1, Answer: "weekend"}},
+				},
+			},
+		},
+	}
+
+	if _, err := lesson.New(candidate); err != nil {
+		t.Fatalf("New: %v", err)
+	}
+}
+
+func TestNewAcceptsBurmeseFoundationalLesson(t *testing.T) {
+	t.Parallel()
+
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "7a5e1e28-4e1a-4e9b-90e5-8a1de7bf2fd0",
+		Language:      "my",
+		Level:         "A1",
+		Title:         "အက္ခရာလေ့ကျင့်ခန်း",
+		ReadingStage:  lesson.StageFoundational,
+		Exercises: []lesson.Exercise{{
+			ID:   "script-1",
+			Type: lesson.TypeScriptPractice,
+			ScriptPractice: &lesson.ScriptPractice{
+				Items: []lesson.ScriptItem{
+					{Glyph: "က", Reading: "ka", Meaning: "letter ka"},
+					{Glyph: "ခ", Reading: "kha", Meaning: "letter kha"},
+				},
+			},
+		}},
+	}
+
+	if _, err := lesson.New(candidate); err != nil {
+		t.Fatalf("New: %v", err)
+	}
+}
+
 func TestNewReportsAllIssuesAtOnce(t *testing.T) {
 	t.Parallel()
 
