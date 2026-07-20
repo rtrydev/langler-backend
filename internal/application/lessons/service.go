@@ -26,10 +26,11 @@ type Service struct {
 	semantic   outbound.SemanticVocabSearch
 	results    outbound.ResultStore
 	progress   outbound.LessonProgressRecorder
+	glossary   outbound.GlossaryStore
 	now        func() time.Time
 }
 
-func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, coverage outbound.CoverageReader, semantic outbound.SemanticVocabSearch, results outbound.ResultStore, progress outbound.LessonProgressRecorder) (*Service, error) {
+func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, reader outbound.ReferenceReader, coverage outbound.CoverageReader, semantic outbound.SemanticVocabSearch, results outbound.ResultStore, progress outbound.LessonProgressRecorder, glossary outbound.GlossaryStore) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("lesson store must not be nil")
 	}
@@ -51,11 +52,14 @@ func NewService(store outbound.LessonStore, checker outbound.ReferenceChecker, r
 	if progress == nil {
 		return nil, errors.New("lesson progress recorder must not be nil")
 	}
+	if glossary == nil {
+		return nil, errors.New("glossary store must not be nil")
+	}
 	idempotent, ok := store.(outbound.IdempotentLessonStore)
 	if !ok {
 		return nil, errors.New("lesson store must support idempotent imports")
 	}
-	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, coverage: coverage, semantic: semantic, results: results, progress: progress, now: time.Now}, nil
+	return &Service{store: store, idempotent: idempotent, checker: checker, reader: reader, coverage: coverage, semantic: semantic, results: results, progress: progress, glossary: glossary, now: time.Now}, nil
 }
 
 func (s *Service) Import(ctx context.Context, command inbound.LessonImportCommand) (inbound.LessonImportResult, error) {
@@ -82,6 +86,9 @@ func (s *Service) Import(ctx context.Context, command inbound.LessonImportComman
 		if err != nil {
 			return inbound.LessonImportResult{}, err
 		}
+		if err := s.addGlossaryWords(ctx, command.Owner, stored.Lesson); err != nil {
+			return inbound.LessonImportResult{}, err
+		}
 		return inbound.LessonImportResult{Stored: storedLesson(stored), Created: created}, nil
 	}
 	saveErr := s.store.Save(ctx, record)
@@ -90,12 +97,33 @@ func (s *Service) Import(ctx context.Context, command inbound.LessonImportComman
 		if err != nil {
 			return inbound.LessonImportResult{}, err
 		}
+		if err := s.addGlossaryWords(ctx, command.Owner, existing.Lesson); err != nil {
+			return inbound.LessonImportResult{}, err
+		}
 		return inbound.LessonImportResult{Stored: storedLesson(existing), Created: false}, nil
 	}
 	if saveErr != nil {
 		return inbound.LessonImportResult{}, saveErr
 	}
+	if err := s.addGlossaryWords(ctx, command.Owner, validated); err != nil {
+		return inbound.LessonImportResult{}, err
+	}
 	return inbound.LessonImportResult{Stored: storedLesson(record), Created: true}, nil
+}
+
+func glossaryRefs(l domain.Lesson) outbound.GlossaryRefs {
+	return outbound.GlossaryRefs{
+		VocabIDs:   collectIDs(l, func(e domain.Exercise) []string { return e.ReferencedVocab }),
+		GrammarIDs: collectIDs(l, func(e domain.Exercise) []string { return e.ReferencedGrammar }),
+	}
+}
+
+func (s *Service) addGlossaryWords(ctx context.Context, owner string, l domain.Lesson) error {
+	refs := glossaryRefs(l)
+	if refs.Empty() {
+		return nil
+	}
+	return s.glossary.AddLessonWords(ctx, owner, string(l.Language), l.ID, refs, s.now().UTC())
 }
 
 func (s *Service) checkReferences(ctx context.Context, l domain.Lesson) error {
@@ -210,6 +238,16 @@ func (s *Service) Delete(ctx context.Context, query inbound.LessonQuery) error {
 	}
 	if !domain.ValidID(query.ID) {
 		return domain.ErrInvalidLessonID
+	}
+	record, err := s.store.Get(ctx, query.Owner, query.ID)
+	if err != nil {
+		return err
+	}
+	refs := glossaryRefs(record.Lesson)
+	if !refs.Empty() {
+		if err := s.glossary.RemoveLessonWords(ctx, query.Owner, string(record.Lesson.Language), query.ID, refs); err != nil {
+			return err
+		}
 	}
 	return s.store.Delete(ctx, query.Owner, query.ID)
 }

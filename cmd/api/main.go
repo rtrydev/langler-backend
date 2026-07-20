@@ -15,6 +15,7 @@ import (
 	"github.com/rtrydev/langler-backend/internal/adapters/inbound/httpapi"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoagenttokens"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoassessments"
+	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoglossary"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamolessons"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoprogress"
 	"github.com/rtrydev/langler-backend/internal/adapters/outbound/dynamoref"
@@ -81,7 +82,11 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, semantic, lessonRepo, progressSvc)
+	glossaryRepo, err := dynamoglossary.NewRepository(client, table)
+	if err != nil {
+		return nil, err
+	}
+	lessonsSvc, err := lessons.NewService(lessonRepo, repo, repo, progressRepo, semantic, lessonRepo, progressSvc, glossaryRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +107,7 @@ func wire(ctx context.Context) (*httpapi.Handler, error) {
 		return nil, err
 	}
 
-	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, tokenSvc, assessmentSvc)
+	return httpapi.NewHandler(statusSvc, referenceSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, lessonsSvc, progressSvc, lessonsSvc, tokenSvc, assessmentSvc)
 }
 
 func embeddingIndexURLs(raw, legacyJapaneseURL string) (map[referencedomain.Language]string, error) {

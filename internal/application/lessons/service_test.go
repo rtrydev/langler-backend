@@ -180,6 +180,51 @@ func (f *fakeReader) VocabByIDs(_ context.Context, _ reference.Language, ids []s
 	return entries, nil
 }
 
+type glossaryCall struct {
+	owner    string
+	language string
+	lessonID string
+	refs     outbound.GlossaryRefs
+}
+
+type fakeGlossary struct {
+	added   []glossaryCall
+	removed []glossaryCall
+	entries []outbound.GlossaryEntry
+	itemIDs map[progress.ItemKind][]string
+	err     error
+}
+
+func (f *fakeGlossary) AddLessonWords(_ context.Context, owner, language, lessonID string, refs outbound.GlossaryRefs, _ time.Time) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.added = append(f.added, glossaryCall{owner: owner, language: language, lessonID: lessonID, refs: refs})
+	return nil
+}
+
+func (f *fakeGlossary) RemoveLessonWords(_ context.Context, owner, language, lessonID string, refs outbound.GlossaryRefs) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.removed = append(f.removed, glossaryCall{owner: owner, language: language, lessonID: lessonID, refs: refs})
+	return nil
+}
+
+func (f *fakeGlossary) Entries(_ context.Context, _, _ string, _ progress.ItemKind) ([]outbound.GlossaryEntry, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.entries, nil
+}
+
+func (f *fakeGlossary) GlossaryItemIDs(_ context.Context, _, _ string, kind progress.ItemKind) ([]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.itemIDs[kind], nil
+}
+
 func newService(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader) *lessons.Service {
 	t.Helper()
 	return newServiceWithCoverage(t, store, checker, reader, &fakeCoverage{})
@@ -192,7 +237,12 @@ func newServiceWithCoverage(t *testing.T, store *fakeStore, checker *fakeChecker
 
 func newServiceWithSemantic(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader, coverage *fakeCoverage, semantic *fakeSemantic) *lessons.Service {
 	t.Helper()
-	svc, err := lessons.NewService(store, checker, reader, coverage, semantic, store, &fakeProgressRecorder{})
+	return newServiceWithGlossary(t, store, checker, reader, coverage, semantic, &fakeGlossary{})
+}
+
+func newServiceWithGlossary(t *testing.T, store *fakeStore, checker *fakeChecker, reader *fakeReader, coverage *fakeCoverage, semantic *fakeSemantic, glossary *fakeGlossary) *lessons.Service {
+	t.Helper()
+	svc, err := lessons.NewService(store, checker, reader, coverage, semantic, store, &fakeProgressRecorder{}, glossary)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -366,12 +416,176 @@ func TestDeleteDelegatesToStore(t *testing.T) {
 	}
 }
 
+func TestImportAddsLessonWordsToGlossary(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{}
+	glossary := &fakeGlossary{}
+	svc := newServiceWithGlossary(t, store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	if _, err := svc.Import(context.Background(), inbound.LessonImportCommand{Owner: "user-1", Lesson: validLesson()}); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if len(glossary.added) != 1 {
+		t.Fatalf("glossary adds = %+v, want 1", glossary.added)
+	}
+	call := glossary.added[0]
+	if call.owner != "user-1" || call.language != "ja" || call.lessonID != validLesson().ID {
+		t.Errorf("glossary call = %+v", call)
+	}
+	if len(call.refs.VocabIDs) != 1 || call.refs.VocabIDs[0] != "N4#1416220" || len(call.refs.GrammarIDs) != 0 {
+		t.Errorf("glossary refs = %+v", call.refs)
+	}
+}
+
+func TestImportWithIdempotencyKeyAddsLessonWordsToGlossary(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{}
+	glossary := &fakeGlossary{}
+	svc := newServiceWithGlossary(t, store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	if _, err := svc.Import(context.Background(), inbound.LessonImportCommand{Owner: "user-1", IdempotencyKey: "stable-request-key", Lesson: validLesson()}); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if len(glossary.added) != 1 || glossary.added[0].lessonID != validLesson().ID {
+		t.Fatalf("glossary adds = %+v, want 1 for the imported lesson", glossary.added)
+	}
+}
+
+func TestDeleteRemovesLessonWordsFromGlossary(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{record: outbound.LessonRecord{Owner: "user-1", Lesson: validLesson()}}
+	glossary := &fakeGlossary{}
+	svc := newServiceWithGlossary(t, store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	if err := svc.Delete(context.Background(), inbound.LessonQuery{Owner: "user-1", ID: validLesson().ID}); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if len(store.deleted) != 1 {
+		t.Fatalf("deleted = %v", store.deleted)
+	}
+	if len(glossary.removed) != 1 {
+		t.Fatalf("glossary removals = %+v, want 1", glossary.removed)
+	}
+	call := glossary.removed[0]
+	if call.owner != "user-1" || call.language != "ja" || call.lessonID != validLesson().ID {
+		t.Errorf("glossary call = %+v", call)
+	}
+	if len(call.refs.VocabIDs) != 1 || call.refs.VocabIDs[0] != "N4#1416220" {
+		t.Errorf("glossary refs = %+v", call.refs)
+	}
+}
+
+func TestDeleteMissingLessonLeavesGlossaryAlone(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{getErr: domain.ErrNotFound}
+	glossary := &fakeGlossary{}
+	svc := newServiceWithGlossary(t, store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	err := svc.Delete(context.Background(), inbound.LessonQuery{Owner: "user-1", ID: validLesson().ID})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+	if len(glossary.removed) != 0 || len(store.deleted) != 0 {
+		t.Fatalf("removed = %+v, deleted = %v, want no mutations", glossary.removed, store.deleted)
+	}
+}
+
+func TestGlossaryListsVocabHydratedFromReferenceData(t *testing.T) {
+	t.Parallel()
+
+	glossary := &fakeGlossary{entries: []outbound.GlossaryEntry{
+		{ID: "N4#1416220", Language: "ja", Kind: progress.KindVocab, LessonCount: 2, AddedAt: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "N4#1311125", Language: "ja", Kind: progress.KindVocab, LessonCount: 1, AddedAt: time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)},
+	}}
+	reader := &fakeReader{byID: map[string]reference.VocabEntry{
+		"N4#1416220": {ID: "N4#1416220", Headword: "週末", Reading: "しゅうまつ", Gloss: []string{"weekend"}, Level: "N4"},
+		"N4#1311125": {ID: "N4#1311125", Headword: "写真", Reading: "しゃしん", Gloss: []string{"photograph"}, Level: "N4"},
+	}}
+	svc := newServiceWithGlossary(t, &fakeStore{}, &fakeChecker{}, reader, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	result, err := svc.Glossary(context.Background(), inbound.GlossaryQuery{Owner: "user-1", Language: "ja"})
+	if err != nil {
+		t.Fatalf("Glossary: %v", err)
+	}
+	if len(result.Languages) != 1 || result.Languages[0].Language != "ja" {
+		t.Fatalf("languages = %+v", result.Languages)
+	}
+	words := result.Languages[0].Words
+	if len(words) != 2 {
+		t.Fatalf("words = %+v, want 2", words)
+	}
+	if words[0].ID != "N4#1311125" || words[1].ID != "N4#1416220" {
+		t.Errorf("order = %s, %s, want newest first", words[0].ID, words[1].ID)
+	}
+	if words[1].Headword != "週末" || words[1].Reading != "しゅうまつ" || words[1].Gloss[0] != "weekend" || words[1].LessonCount != 2 {
+		t.Errorf("word = %+v", words[1])
+	}
+}
+
+func TestGlossaryRequiresOwnerAndKnownLanguage(t *testing.T) {
+	t.Parallel()
+
+	svc := newService(t, &fakeStore{}, &fakeChecker{}, &fakeReader{})
+	if _, err := svc.Glossary(context.Background(), inbound.GlossaryQuery{Language: "ja"}); !errors.Is(err, domain.ErrInvalidOwner) {
+		t.Fatalf("error = %v, want ErrInvalidOwner", err)
+	}
+	var validation *domain.ValidationError
+	if _, err := svc.Glossary(context.Background(), inbound.GlossaryQuery{Owner: "user-1", Language: "xx"}); !errors.As(err, &validation) {
+		t.Fatalf("error = %v, want validation error", err)
+	}
+}
+
+func TestGlossaryWithoutLanguageCoversAllLanguages(t *testing.T) {
+	t.Parallel()
+
+	svc := newService(t, &fakeStore{}, &fakeChecker{}, &fakeReader{})
+	result, err := svc.Glossary(context.Background(), inbound.GlossaryQuery{Owner: "user-1"})
+	if err != nil {
+		t.Fatalf("Glossary: %v", err)
+	}
+	if len(result.Languages) != len(domain.Languages()) {
+		t.Fatalf("languages = %+v, want one group per supported language", result.Languages)
+	}
+}
+
+func TestBuildPromptTreatsGlossaryWordsAsCovered(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeReader{
+		vocab: outbound.VocabPage{Entries: []reference.VocabEntry{
+			{ID: "N4#1416220", Headword: "週末", Reading: "しゅうまつ", Gloss: []string{"weekend"}},
+			{ID: "N4#1311125", Headword: "写真", Reading: "しゃしん", Gloss: []string{"photograph"}},
+		}},
+	}
+	glossary := &fakeGlossary{itemIDs: map[progress.ItemKind][]string{
+		progress.KindVocab: {"N4#1416220"},
+	}}
+	svc := newServiceWithGlossary(t, &fakeStore{}, &fakeChecker{}, reader, &fakeCoverage{}, &fakeSemantic{}, glossary)
+	result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+		Owner:            "user-1",
+		Language:         "ja",
+		Level:            "N4",
+		ExerciseTypes:    []string{"cloze"},
+		IncludeReference: true,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	covered := strings.Index(result.Prompt, "N4#1416220")
+	uncovered := strings.Index(result.Prompt, "N4#1311125")
+	if covered == -1 || uncovered == -1 {
+		t.Fatalf("prompt is missing reference entries: covered=%d uncovered=%d", covered, uncovered)
+	}
+	if uncovered > covered {
+		t.Errorf("glossary-covered word listed before uncovered word")
+	}
+}
+
 func TestRecordSavesValidatedPerUserResult(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{record: outbound.LessonRecord{Lesson: validLesson()}}
 	progressRecorder := &fakeProgressRecorder{}
-	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, store, progressRecorder)
+	svc, err := lessons.NewService(store, &fakeChecker{}, &fakeReader{}, &fakeCoverage{}, &fakeSemantic{}, store, progressRecorder, &fakeGlossary{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}

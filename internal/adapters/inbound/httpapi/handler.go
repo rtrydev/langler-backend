@@ -23,6 +23,7 @@ type Handler struct {
 	topics      inbound.LessonTopicAdvisor
 	results     inbound.LessonResultRecorder
 	progress    inbound.ProgressProvider
+	glossary    inbound.GlossaryProvider
 	tokens      inbound.AgentTokenManager
 	assessments inbound.AssessmentProvider
 }
@@ -36,6 +37,7 @@ func NewHandler(
 	topics inbound.LessonTopicAdvisor,
 	results inbound.LessonResultRecorder,
 	progress inbound.ProgressProvider,
+	glossary inbound.GlossaryProvider,
 	tokens inbound.AgentTokenManager,
 	assessments inbound.AssessmentProvider,
 ) (*Handler, error) {
@@ -63,13 +65,16 @@ func NewHandler(
 	if progress == nil {
 		return nil, errors.New("progress provider must not be nil")
 	}
+	if glossary == nil {
+		return nil, errors.New("glossary provider must not be nil")
+	}
 	if tokens == nil {
 		return nil, errors.New("agent token manager must not be nil")
 	}
 	if assessments == nil {
 		return nil, errors.New("assessment provider must not be nil")
 	}
-	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, topics: topics, results: results, progress: progress, tokens: tokens, assessments: assessments}, nil
+	return &Handler{status: status, reference: reference, importer: importer, library: library, prompts: prompts, topics: topics, results: results, progress: progress, glossary: glossary, tokens: tokens, assessments: assessments}, nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -117,6 +122,8 @@ func (h *Handler) route(ctx context.Context, method, path string, req events.API
 		return h.handleReviewGrade(ctx, req)
 	case method == http.MethodGet && path == "/progress":
 		return h.handleProgressSummary(ctx, req)
+	case method == http.MethodGet && path == "/glossary":
+		return h.handleGlossary(ctx, req)
 	case method == http.MethodPost && path == "/assessments":
 		return h.handleAssessmentStart(ctx, req)
 	case method == http.MethodGet && path == "/assessments":

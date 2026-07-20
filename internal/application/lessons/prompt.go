@@ -333,8 +333,15 @@ func (s *Service) coveredIDs(ctx context.Context, owner, language string, kind p
 	if err != nil {
 		return nil, err
 	}
-	covered := make(map[string]bool, len(ids))
+	glossaryIDs, err := s.glossary.GlossaryItemIDs(ctx, owner, language, kind)
+	if err != nil {
+		return nil, err
+	}
+	covered := make(map[string]bool, len(ids)+len(glossaryIDs))
 	for _, id := range ids {
+		covered[id] = true
+	}
+	for _, id := range glossaryIDs {
 		covered[id] = true
 	}
 	return covered, nil
