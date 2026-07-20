@@ -446,6 +446,45 @@ func TestBuildConnectedPromptIncludesStoryAndReference(t *testing.T) {
 	}
 }
 
+func TestBuildPromptDescribesOnlySelectedExerciseTypes(t *testing.T) {
+	t.Parallel()
+
+	svc := newService(t, &fakeStore{}, &fakeChecker{}, &fakeReader{})
+	result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+		Language:      "ja",
+		Level:         "N4",
+		ExerciseTypes: []string{"cloze"},
+		ReadingStage:  "connected",
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	prompt := result.Prompt
+	// The selection is cloze; reading is auto-added for the connected-stage story.
+	for _, want := range []string{
+		"Use only these exercise types",
+		"- cloze: {",
+		"- reading: {",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt missing %q", want)
+		}
+	}
+	// No shape for an unselected type may leak in and invite the model to use it.
+	for _, absent := range []string{
+		"- translation: {",
+		"- ordering: {",
+		"- matching: {",
+		"- multiple_choice: {",
+		"- writing_prompt:",
+		"- script_practice:",
+	} {
+		if strings.Contains(prompt, absent) {
+			t.Errorf("prompt describes unselected exercise type %q", absent)
+		}
+	}
+}
+
 func TestBuildFoundationalPromptOmitsStory(t *testing.T) {
 	t.Parallel()
 

@@ -374,6 +374,7 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	for _, t := range request.exerciseTypes {
 		types = append(types, string(t))
 	}
+	has := func(t domain.ExerciseType) bool { return slices.Contains(request.exerciseTypes, t) }
 
 	fmt.Fprintf(&b, "You are generating a lesson for Langler, a personal language-learning app. Follow every instruction exactly and return only JSON.\n\n")
 	fmt.Fprintf(&b, "## Lesson parameters\n")
@@ -384,6 +385,7 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	}
 	fmt.Fprintf(&b, "- Reading stage: %s\n", request.stage)
 	fmt.Fprintf(&b, "- Exercise types to use: %s\n", strings.Join(types, ", "))
+	fmt.Fprintf(&b, "  Use only these exercise types. Every exercise's \"type\" must be one of them; never add an exercise of any other type.\n")
 	fmt.Fprintf(&b, "- Length: %s (%s)\n\n", request.length, lengthGuidance[request.length])
 
 	if request.stage == domain.StageConnected {
@@ -403,7 +405,7 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 		}
 		fmt.Fprintf(&b, "## Teaching flow\n")
 		fmt.Fprintf(&b, "This is the learner's first encounter with the material; the lesson teaches, it does not quiz prior knowledge.\n")
-		fmt.Fprintf(&b, "- After the story, order the exercises from recognition to production: matching, multiple choice, and script practice before cloze, cloze before ordering, translation and writing last.\n")
+		fmt.Fprintf(&b, "- After the story, order the exercises you include from recognition to production, using only the selected types: recognition (matching, multiple choice, script practice) before controlled production (cloze, ordering) before free production (translation, writing). Skip any of these the selection does not include; never add one to complete the sequence.\n")
 		fmt.Fprintf(&b, "- Never require a word or pattern that the story or an earlier exercise has not already introduced.\n")
 		fmt.Fprintf(&b, "- Give every cloze blank in the first half of the lesson a \"hint\"; later exercises may drop hints as the learner warms up.\n")
 		fmt.Fprintf(&b, "- Keep the first exercises after the story answerable straight from the story context and raise the difficulty gradually toward free production at the end.\n\n")
@@ -456,19 +458,36 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	fmt.Fprintf(&b, "- \"exercises\": array of exercise objects\n\n")
 	fmt.Fprintf(&b, "Every exercise object has:\n")
 	fmt.Fprintf(&b, "{\"exerciseId\": \"ex-1\", \"type\": \"<type>\", \"prompt\": \"<learner-facing instruction>\", \"points\": 1-20, \"referencedVocab\": [\"<id>\"], \"referencedGrammar\": [\"<id>\"], \"payload\": {...}}\n")
-	fmt.Fprintf(&b, "exerciseId values must be unique. Payload shapes by type:\n")
-	fmt.Fprintf(&b, "- cloze: {\"text\": \"sentence with {{1}} and {{2}} markers\", \"blanks\": [{\"index\": 1, \"answer\": \"...\", \"hint\": \"optional\"}], \"wordBank\": [\"...\"]} - every {{n}} marker needs exactly one blank with that index. Always include a wordBank: every blank's answer plus 3-6 plausible same-level distractors, in random order, so the learner selects instead of typing.\n")
-	fmt.Fprintf(&b, "- translation: {\"source\": \"<sentence in %s>\", \"reference\": \"<English translation>\"}\n", languageNames[request.language])
-	fmt.Fprintf(&b, "- ordering: {\"items\": [\"...\", \"...\"], \"translation\": \"optional\"} - list 2-20 items in the CORRECT order; the app shuffles them for the learner.\n")
-	fmt.Fprintf(&b, "- matching: {\"pairs\": [{\"left\": \"<target language>\", \"right\": \"<meaning>\"}]} - 2-20 pairs.\n")
-	fmt.Fprintf(&b, "- multiple_choice: {\"questions\": [{\"question\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"answer\": \"<must exactly equal one option>\"}]} - 1-10 questions, each with 3-4 options and exactly one correct answer. Make distractors plausible: same word class and level, wrong in meaning or usage.\n")
-	fmt.Fprintf(&b, "- reading: {\"genre\": \"short_story\", \"title\": \"...\", \"passage\": \"...\", \"annotations\": [{\"surface\": \"...\", \"reading\": \"...\", \"gloss\": \"...\"}], \"questions\": [{\"question\": \"...\", \"kind\": \"multiple_choice\", \"options\": [\"...\"], \"answer\": \"<must equal one option>\"}]} - comprehension questions must use \"kind\": \"multiple_choice\" so the app can grade them; only use {\"kind\": \"short_answer\", \"answer\": \"...\", \"alternates\": [\"...\"]} when a question genuinely cannot be closed-form, and then list every accepted phrasing in alternates.\n")
-	fmt.Fprintf(&b, "- writing_prompt: put the writing task in the exercise's \"prompt\"; payload is optional: {\"guidance\": \"...\", \"modelAnswer\": \"...\"}\n")
-	if request.language == "pl" {
-		fmt.Fprintf(&b, "- script_practice: Polish orthography only. Use choice items {\"kind\": \"choice\", \"glyph\": \"<sentence or cue with a blank>\", \"meaning\": \"<brief rule hint>\", \"options\": [\"<correct spelling>\", \"<plausible contrast>\"], \"answer\": \"<must exactly equal one option>\"} and dictation-style recall items {\"kind\": \"dictation\", \"glyph\": \"<definition or cloze cue; no audio>\", \"meaning\": \"<optional contrast hint>\", \"answer\": \"<correct Polish word>\"}. Exercise ó/u, rz/ż, ch/h, Polish diacritics, or digraphs; never use tracing or stroke-order tasks.\n\n")
-	} else {
-		fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n\n")
+	fmt.Fprintf(&b, "exerciseId values must be unique. Payload shapes for the allowed types (only these types may appear):\n")
+	if has(domain.TypeCloze) {
+		fmt.Fprintf(&b, "- cloze: {\"text\": \"sentence with {{1}} and {{2}} markers\", \"blanks\": [{\"index\": 1, \"answer\": \"...\", \"hint\": \"optional\"}], \"wordBank\": [\"...\"]} - every {{n}} marker needs exactly one blank with that index. Always include a wordBank: every blank's answer plus 3-6 plausible same-level distractors, in random order, so the learner selects instead of typing.\n")
 	}
+	if has(domain.TypeTranslation) {
+		fmt.Fprintf(&b, "- translation: {\"source\": \"<sentence in %s>\", \"reference\": \"<English translation>\"}\n", languageNames[request.language])
+	}
+	if has(domain.TypeOrdering) {
+		fmt.Fprintf(&b, "- ordering: {\"items\": [\"...\", \"...\"], \"translation\": \"optional\"} - list 2-20 items in the CORRECT order; the app shuffles them for the learner.\n")
+	}
+	if has(domain.TypeMatching) {
+		fmt.Fprintf(&b, "- matching: {\"pairs\": [{\"left\": \"<target language>\", \"right\": \"<meaning>\"}]} - 2-20 pairs.\n")
+	}
+	if has(domain.TypeMultipleChoice) {
+		fmt.Fprintf(&b, "- multiple_choice: {\"questions\": [{\"question\": \"...\", \"options\": [\"...\", \"...\", \"...\", \"...\"], \"answer\": \"<must exactly equal one option>\"}]} - 1-10 questions, each with 3-4 options and exactly one correct answer. Make distractors plausible: same word class and level, wrong in meaning or usage.\n")
+	}
+	if has(domain.TypeReading) {
+		fmt.Fprintf(&b, "- reading: {\"genre\": \"short_story\", \"title\": \"...\", \"passage\": \"...\", \"annotations\": [{\"surface\": \"...\", \"reading\": \"...\", \"gloss\": \"...\"}], \"questions\": [{\"question\": \"...\", \"kind\": \"multiple_choice\", \"options\": [\"...\"], \"answer\": \"<must equal one option>\"}]} - comprehension questions must use \"kind\": \"multiple_choice\" so the app can grade them; only use {\"kind\": \"short_answer\", \"answer\": \"...\", \"alternates\": [\"...\"]} when a question genuinely cannot be closed-form, and then list every accepted phrasing in alternates.\n")
+	}
+	if has(domain.TypeWritingPrompt) {
+		fmt.Fprintf(&b, "- writing_prompt: put the writing task in the exercise's \"prompt\"; payload is optional: {\"guidance\": \"...\", \"modelAnswer\": \"...\"}\n")
+	}
+	if has(domain.TypeScriptPractice) {
+		if request.language == "pl" {
+			fmt.Fprintf(&b, "- script_practice: Polish orthography only. Use choice items {\"kind\": \"choice\", \"glyph\": \"<sentence or cue with a blank>\", \"meaning\": \"<brief rule hint>\", \"options\": [\"<correct spelling>\", \"<plausible contrast>\"], \"answer\": \"<must exactly equal one option>\"} and dictation-style recall items {\"kind\": \"dictation\", \"glyph\": \"<definition or cloze cue; no audio>\", \"meaning\": \"<optional contrast hint>\", \"answer\": \"<correct Polish word>\"}. Exercise ó/u, rz/ż, ch/h, Polish diacritics, or digraphs; never use tracing or stroke-order tasks.\n")
+		} else {
+			fmt.Fprintf(&b, "- script_practice: {\"items\": [{\"glyph\": \"<character or short word>\", \"reading\": \"...\", \"meaning\": \"...\"}]}\n")
+		}
+	}
+	fmt.Fprintf(&b, "\n")
 	if request.language == "my" {
 		fmt.Fprintf(&b, "- Every Burmese string must use canonical Unicode, never Zawgyi, and must contain only orthographically legal medial, vowel, tone, asat, kinzi, and virama combinations.\n")
 		fmt.Fprintf(&b, "- Reading annotations and script-practice readings use the supplied Hybrid Burmese romanization exactly; romanization is a learner-controlled aid, not part of Burmese running text.\n")
