@@ -73,6 +73,54 @@ func seedItems(t *testing.T, client *dynamodb.Client, table string, items []map[
 	}
 }
 
+func TestSnapshotClampsOverflowedDueDates(t *testing.T) {
+	client := localClient(t)
+	table := createTable(t, client)
+	// A row written before the MaxIntervalDays cap: the five-digit-year dueDate
+	// does not parse as RFC 3339, which used to fail the whole read.
+	seedItems(t, client, table, []map[string]any{
+		{
+			"PK": "USER#user-1", "SK": "SRS#ja#vocab#N5#1000001", "itemId": "N5#1000001",
+			"language": "ja", "kind": "vocab", "headword": "週末", "gloss": "weekend",
+			"easeFactor": 2.5, "intervalDays": 36000, "repetitions": 40,
+			"dueDate":   "36646-03-17T00:00:00Z",
+			"createdAt": "2026-07-19T00:00:00Z", "updatedAt": "2026-07-20T10:00:00Z", "version": 40,
+		},
+	})
+
+	repo, err := dynamoprogress.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	ctx := context.Background()
+
+	snapshot, err := repo.Snapshot(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if len(snapshot.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(snapshot.Items))
+	}
+	item := snapshot.Items[0]
+	if item.IntervalDays != domain.MaxIntervalDays {
+		t.Errorf("IntervalDays = %d, want the %d cap", item.IntervalDays, domain.MaxIntervalDays)
+	}
+	if want := time.Date(2027, 7, 20, 10, 0, 0, 0, time.UTC); !item.DueDate.Equal(want) {
+		t.Errorf("DueDate = %v, want updatedAt plus the cap (%v)", item.DueDate, want)
+	}
+	if item.Version != 40 {
+		t.Errorf("Version = %d, want 40 so the next save still matches", item.Version)
+	}
+
+	items, err := repo.GetItems(ctx, "user-1", "ja", []string{"vocab#N5#1000001"})
+	if err != nil {
+		t.Fatalf("GetItems: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("GetItems = %d items, want 1", len(items))
+	}
+}
+
 func TestCoveredItemIDs(t *testing.T) {
 	client := localClient(t)
 	table := createTable(t, client)

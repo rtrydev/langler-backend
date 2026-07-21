@@ -15,6 +15,11 @@ var (
 	ErrStorageFailure = errors.New("progress storage failed")
 )
 
+// MaxIntervalDays caps how far out a review can be scheduled. Uncapped, the
+// interval compounds by the ease factor on every review and the due date
+// eventually overflows the four-digit year RFC 3339 storage can round-trip.
+const MaxIntervalDays = 365
+
 type ItemKind string
 
 const (
@@ -144,6 +149,7 @@ func Schedule(item Item, grade Grade, reviewedAt, reviewedOn time.Time) (Item, e
 		item.IntervalDays = nextInterval(item, 4, 10, 1.3)
 		item.EaseFactor += 0.1
 	}
+	item.IntervalDays = min(item.IntervalDays, MaxIntervalDays)
 
 	if reviewedOn.IsZero() {
 		reviewedOn = reviewedAt
