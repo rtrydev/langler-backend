@@ -52,6 +52,45 @@ func TestScheduleFollowsSM2StyleIntervals(t *testing.T) {
 	}
 }
 
+func TestScheduleCapsTheInterval(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	item, err := progress.NewItem(progress.Item{
+		ID: "N4#1416220", Language: "ja", Kind: progress.KindVocab,
+		Headword: "週末", Gloss: "weekend",
+		EaseFactor: 2.5, IntervalDays: 300, Repetitions: 12,
+	}, now)
+	if err != nil {
+		t.Fatalf("NewItem: %v", err)
+	}
+
+	item, err = progress.Schedule(item, progress.GradeEasy, now, now)
+	if err != nil {
+		t.Fatalf("Schedule: %v", err)
+	}
+	if item.IntervalDays != progress.MaxIntervalDays {
+		t.Fatalf("IntervalDays = %d, want the %d cap", item.IntervalDays, progress.MaxIntervalDays)
+	}
+	if want := time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC).AddDate(0, 0, progress.MaxIntervalDays); !item.DueDate.Equal(want) {
+		t.Fatalf("DueDate = %v, want %v", item.DueDate, want)
+	}
+
+	// An item already at the cap keeps a bounded, storable schedule forever.
+	for range 5 {
+		item, err = progress.Schedule(item, progress.GradeEasy, item.DueDate.Add(12*time.Hour), item.DueDate)
+		if err != nil {
+			t.Fatalf("Schedule at cap: %v", err)
+		}
+		if item.IntervalDays != progress.MaxIntervalDays {
+			t.Fatalf("IntervalDays = %d, want the %d cap", item.IntervalDays, progress.MaxIntervalDays)
+		}
+	}
+	if item.DueDate.Year() > 9999 {
+		t.Fatalf("DueDate overflowed the four-digit year: %v", item.DueDate)
+	}
+}
+
 func TestGradePerformance(t *testing.T) {
 	t.Parallel()
 

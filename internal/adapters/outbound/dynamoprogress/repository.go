@@ -365,10 +365,6 @@ func toItem(owner string, item domain.Item) itemRecord {
 }
 
 func (record itemRecord) toDomain() (domain.Item, error) {
-	dueDate, err := time.Parse(time.RFC3339Nano, record.DueDate)
-	if err != nil {
-		return domain.Item{}, fmt.Errorf("%w: invalid due date: %v", domain.ErrStorageFailure, err)
-	}
 	createdAt, err := time.Parse(time.RFC3339Nano, record.CreatedAt)
 	if err != nil {
 		return domain.Item{}, fmt.Errorf("%w: invalid created time: %v", domain.ErrStorageFailure, err)
@@ -376,6 +372,15 @@ func (record itemRecord) toDomain() (domain.Item, error) {
 	updatedAt, err := time.Parse(time.RFC3339Nano, record.UpdatedAt)
 	if err != nil {
 		return domain.Item{}, fmt.Errorf("%w: invalid updated time: %v", domain.ErrStorageFailure, err)
+	}
+	dueDate, err := time.Parse(time.RFC3339Nano, record.DueDate)
+	if err != nil {
+		// Rows written before the MaxIntervalDays cap can hold a five-digit-year
+		// dueDate that RFC 3339 cannot parse back. Clamp the row to the capped
+		// schedule instead of failing every read that touches it; the next
+		// review persists the repaired values.
+		record.IntervalDays = min(record.IntervalDays, domain.MaxIntervalDays)
+		dueDate = updatedAt.AddDate(0, 0, record.IntervalDays)
 	}
 	var lastReviewed time.Time
 	if record.LastReviewedAt != "" {
