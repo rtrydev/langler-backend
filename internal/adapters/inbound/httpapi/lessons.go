@@ -336,9 +336,50 @@ func (h *Handler) handleLessonList(ctx context.Context, req events.APIGatewayV2H
 
 	items := make([]lessonSummaryDTO, 0, len(result.Lessons))
 	for _, stored := range result.Lessons {
-		items = append(items, toLessonSummary(stored))
+		item := toLessonSummary(stored)
+		if summary, ok := result.Completions[stored.Lesson.ID]; ok {
+			item.Completion = &lessonCompletionSummaryDTO{
+				Count:           summary.Count,
+				LastCompletedAt: summary.LastCompletedAt.Format(time.RFC3339),
+				LastScore:       summary.LastScore,
+				LastMaxScore:    summary.LastMaxScore,
+			}
+		}
+		items = append(items, item)
 	}
 	return respondJSON(http.StatusOK, pageResponse[lessonSummaryDTO]{Items: items, NextCursor: result.NextCursor})
+}
+
+type lessonCompletionDTO struct {
+	AttemptID   string `json:"attemptId"`
+	CompletedAt string `json:"completedAt"`
+	Score       int    `json:"score"`
+	MaxScore    int    `json:"maxScore"`
+}
+
+func (h *Handler) handleLessonCompletions(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) events.APIGatewayV2HTTPResponse {
+	owner := ownerFrom(req)
+	if owner == "" {
+		return errorJSON(http.StatusUnauthorized, "missing authenticated user")
+	}
+	limit, ok := parseLimit(req.QueryStringParameters["limit"])
+	if !ok {
+		return errorJSON(http.StatusBadRequest, "limit must be a positive integer")
+	}
+	result, err := h.library.Completions(ctx, inbound.LessonCompletionsQuery{Owner: owner, ID: id, Limit: limit})
+	if err != nil {
+		return lessonError(ctx, err)
+	}
+	items := make([]lessonCompletionDTO, 0, len(result.Completions))
+	for _, completion := range result.Completions {
+		items = append(items, lessonCompletionDTO{
+			AttemptID:   completion.AttemptID,
+			CompletedAt: completion.CompletedAt.Format(time.RFC3339),
+			Score:       completion.Score,
+			MaxScore:    completion.MaxScore,
+		})
+	}
+	return respondJSON(http.StatusOK, map[string][]lessonCompletionDTO{"items": items})
 }
 
 func (h *Handler) handleLessonGet(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) events.APIGatewayV2HTTPResponse {
@@ -681,22 +722,30 @@ func toImportResponse(result inbound.LessonImportResult) importResponseDTO {
 	}
 }
 
+type lessonCompletionSummaryDTO struct {
+	Count           int    `json:"count"`
+	LastCompletedAt string `json:"lastCompletedAt"`
+	LastScore       int    `json:"lastScore"`
+	LastMaxScore    int    `json:"lastMaxScore"`
+}
+
 type lessonSummaryDTO struct {
-	LessonID         string   `json:"lessonId"`
-	Language         string   `json:"language"`
-	Level            string   `json:"level"`
-	Title            string   `json:"title"`
-	Description      string   `json:"description,omitempty"`
-	Topic            string   `json:"topic,omitempty"`
-	Tags             []string `json:"tags,omitempty"`
-	ReadingStage     string   `json:"readingStage"`
-	SourceModel      string   `json:"sourceModel,omitempty"`
-	EstimatedMinutes int      `json:"estimatedMinutes,omitempty"`
-	ExerciseTypes    []string `json:"exerciseTypes"`
-	ExerciseCount    int      `json:"exerciseCount"`
-	TotalPoints      int      `json:"totalPoints"`
-	HasStory         bool     `json:"hasStory"`
-	CreatedAt        string   `json:"createdAt"`
+	LessonID         string                      `json:"lessonId"`
+	Language         string                      `json:"language"`
+	Level            string                      `json:"level"`
+	Title            string                      `json:"title"`
+	Description      string                      `json:"description,omitempty"`
+	Topic            string                      `json:"topic,omitempty"`
+	Tags             []string                    `json:"tags,omitempty"`
+	ReadingStage     string                      `json:"readingStage"`
+	SourceModel      string                      `json:"sourceModel,omitempty"`
+	EstimatedMinutes int                         `json:"estimatedMinutes,omitempty"`
+	ExerciseTypes    []string                    `json:"exerciseTypes"`
+	ExerciseCount    int                         `json:"exerciseCount"`
+	TotalPoints      int                         `json:"totalPoints"`
+	HasStory         bool                        `json:"hasStory"`
+	CreatedAt        string                      `json:"createdAt"`
+	Completion       *lessonCompletionSummaryDTO `json:"completion,omitempty"`
 }
 
 func toLessonSummary(stored inbound.StoredLesson) lessonSummaryDTO {

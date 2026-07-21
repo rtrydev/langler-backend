@@ -71,6 +71,14 @@ type resultItem struct {
 	Exercises   []exerciseResultItem `dynamodbav:"exercises"`
 }
 
+type completionItem struct {
+	AttemptID   string `dynamodbav:"attemptId"`
+	LessonID    string `dynamodbav:"lessonId"`
+	CompletedAt string `dynamodbav:"completedAt"`
+	Score       int    `dynamodbav:"score"`
+	MaxScore    int    `dynamodbav:"maxScore"`
+}
+
 type exerciseResultItem struct {
 	ExerciseID string `dynamodbav:"exerciseId"`
 	Type       string `dynamodbav:"type"`

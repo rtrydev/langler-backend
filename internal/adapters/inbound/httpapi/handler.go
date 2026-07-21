@@ -138,6 +138,9 @@ func (h *Handler) route(ctx context.Context, method, path string, req events.API
 	case method == http.MethodPost && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/lessons/"), "/results")
 		return h.handleLessonResult(ctx, req, id)
+	case method == http.MethodGet && strings.HasPrefix(path, "/lessons/") && strings.HasSuffix(path, "/results"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/lessons/"), "/results")
+		return h.handleLessonCompletions(ctx, req, id)
 	case method == http.MethodGet && strings.HasPrefix(path, "/lessons/"):
 		return h.handleLessonGet(ctx, req, strings.TrimPrefix(path, "/lessons/"))
 	case method == http.MethodDelete && strings.HasPrefix(path, "/lessons/"):
