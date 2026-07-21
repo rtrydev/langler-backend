@@ -94,6 +94,10 @@ func New(candidate Lesson) (Lesson, error) {
 	l := candidate
 	c := &collector{}
 
+	if l.Language == "my" {
+		normalizeBurmese(&l)
+	}
+
 	l.SchemaVersion = strings.TrimSpace(l.SchemaVersion)
 	if l.SchemaVersion != SchemaVersion {
 		c.add("schemaVersion", "must be %q", SchemaVersion)

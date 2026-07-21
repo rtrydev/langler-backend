@@ -7,6 +7,86 @@ import (
 	"github.com/rtrydev/langler-backend/internal/domain/burmese"
 )
 
+func normalizeBurmese(l *Lesson) {
+	n := burmese.Normalize
+	l.Title = n(l.Title)
+	l.Description = n(l.Description)
+	l.Topic = n(l.Topic)
+	for i := range l.Exercises {
+		e := &l.Exercises[i]
+		e.Prompt = n(e.Prompt)
+		if e.Cloze != nil {
+			e.Cloze.Text = n(e.Cloze.Text)
+			for j := range e.Cloze.Blanks {
+				b := &e.Cloze.Blanks[j]
+				b.Answer = n(b.Answer)
+				b.Hint = n(b.Hint)
+				normalizeAll(b.Alternates, n)
+			}
+			normalizeAll(e.Cloze.WordBank, n)
+		}
+		if e.Translation != nil {
+			e.Translation.Source = n(e.Translation.Source)
+			e.Translation.Reference = n(e.Translation.Reference)
+		}
+		if e.Ordering != nil {
+			normalizeAll(e.Ordering.Items, n)
+			e.Ordering.Translation = n(e.Ordering.Translation)
+		}
+		if e.Matching != nil {
+			for j := range e.Matching.Pairs {
+				e.Matching.Pairs[j].Left = n(e.Matching.Pairs[j].Left)
+				e.Matching.Pairs[j].Right = n(e.Matching.Pairs[j].Right)
+			}
+		}
+		if e.MultipleChoice != nil {
+			for j := range e.MultipleChoice.Questions {
+				q := &e.MultipleChoice.Questions[j]
+				q.Question = n(q.Question)
+				q.Answer = n(q.Answer)
+				normalizeAll(q.Options, n)
+			}
+		}
+		if e.Reading != nil {
+			e.Reading.Title = n(e.Reading.Title)
+			e.Reading.Passage = n(e.Reading.Passage)
+			for j := range e.Reading.Annotations {
+				a := &e.Reading.Annotations[j]
+				a.Surface = n(a.Surface)
+				a.Reading = n(a.Reading)
+				a.Gloss = n(a.Gloss)
+			}
+			for j := range e.Reading.Questions {
+				q := &e.Reading.Questions[j]
+				q.Question = n(q.Question)
+				q.Answer = n(q.Answer)
+				normalizeAll(q.Options, n)
+				normalizeAll(q.Alternates, n)
+			}
+		}
+		if e.WritingPrompt != nil {
+			e.WritingPrompt.Guidance = n(e.WritingPrompt.Guidance)
+			e.WritingPrompt.ModelAnswer = n(e.WritingPrompt.ModelAnswer)
+		}
+		if e.ScriptPractice != nil {
+			for j := range e.ScriptPractice.Items {
+				item := &e.ScriptPractice.Items[j]
+				item.Glyph = n(item.Glyph)
+				item.Reading = n(item.Reading)
+				item.Meaning = n(item.Meaning)
+				item.Answer = n(item.Answer)
+				normalizeAll(item.Options, n)
+			}
+		}
+	}
+}
+
+func normalizeAll(values []string, n func(string) string) {
+	for i := range values {
+		values[i] = n(values[i])
+	}
+}
+
 func burmeseIssues(c *collector, l Lesson) {
 	for index, exercise := range l.Exercises {
 		path := fmt.Sprintf("exercises[%d]", index)

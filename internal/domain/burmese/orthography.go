@@ -17,7 +17,7 @@ func (i OrthographyIssue) Error() string {
 
 var medialBases = map[rune]map[rune]bool{
 	0x103b: runeSet("ကခဂဃစဆဇတထဒဓနပဖဗဘမယလ"),
-	0x103c: runeSet("ကခဂဃစဆဇတထဒဓနပဖဗဘမဟလ"),
+	0x103c: runeSet("ကခဂဃငစဆဇတထဒဓနပဖဗဘမဟလ"),
 	0x103d: runeSet("ကခဂဃငစဆဇဉညဋဌဍဎဏတထဒဓနပဖဗဘမယရလဝသဟ"),
 	0x103e: runeSet("ငဉညနမယရလဝ"),
 }
@@ -105,9 +105,6 @@ func validateRun(runes []rune, offset int) []OrthographyIssue {
 			if current == 0x102c && tallAaBases[base] && lastMedial == 0 {
 				add("this consonant requires tall aa ါ")
 			}
-			if lastMedial == 0x103e && (current == 0x102e || current == 0x1030) {
-				add("medial ha cannot combine with long i or long u")
-			}
 		case current == 0x103a:
 			if base == 0 || index == 0 || (!isConsonant(runes[index-1]) && !isDependentVowel(runes[index-1]) && runes[index-1] != 0x1037 && runes[index-1] != 0x1038) {
 				add("asat must close a consonant or vowel-bearing syllable")
@@ -187,7 +184,7 @@ func validStackUpper(current rune) bool {
 }
 
 func validStackLower(current rune) bool {
-	if current == 'ဟ' {
+	if current == 'ဟ' || current == 'လ' {
 		return true
 	}
 	for _, class := range stackClasses {

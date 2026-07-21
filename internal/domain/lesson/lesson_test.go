@@ -437,6 +437,39 @@ func TestNewAcceptsUnicodeBurmeseLesson(t *testing.T) {
 	}
 }
 
+func TestNewNormalizesBurmeseMarkOrder(t *testing.T) {
+	t.Parallel()
+	candidate := lesson.Lesson{
+		SchemaVersion: lesson.SchemaVersion,
+		ID:            "7a5e1e28-4e1a-4e9b-90e5-8a1de7bf2fd0",
+		Language:      "my",
+		Level:         "A1",
+		Title:         "လူှဒါန်းခြင်း",
+		ReadingStage:  lesson.StageFoundational,
+		Exercises: []lesson.Exercise{{
+			ID: "cloze", Type: lesson.TypeCloze, Points: 2,
+			Cloze: &lesson.Cloze{
+				Text:     "သူ ကျောင်းကုိ {{1}} မယ်။",
+				Blanks:   []lesson.Blank{{Index: 1, Answer: "သွား"}},
+				WordBank: []string{"သွား", "လူှ"},
+			},
+		}},
+	}
+	validated, err := lesson.New(candidate)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if validated.Title != "လှူဒါန်းခြင်း" {
+		t.Errorf("Title = %q, want normalized mark order", validated.Title)
+	}
+	if got := validated.Exercises[0].Cloze.WordBank[1]; got != "လှူ" {
+		t.Errorf("WordBank[1] = %q, want %q", got, "လှူ")
+	}
+	if got := validated.Exercises[0].Cloze.Text; got != "သူ ကျောင်းကို {{1}} မယ်။" {
+		t.Errorf("Text = %q, want normalized mark order", got)
+	}
+}
+
 func TestNewRejectsIllegalBurmeseOrthography(t *testing.T) {
 	t.Parallel()
 	candidate := lesson.Lesson{
