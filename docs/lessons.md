@@ -23,7 +23,7 @@ and the future agentic import path share this contract.
     {
       "exerciseId": "unique within the lesson",
       "type": "cloze | translation | ordering | matching | multiple_choice | reading | writing_prompt | script_practice",
-      "prompt": "learner-facing instruction",
+      "prompt": "learner-facing instruction (English below JLPT N3 / CEFR B1, target language from N3/B1 up)",
       "points": 8,
       "referencedVocab": ["N4#1311125"],
       "referencedGrammar": ["N4#te-form"],

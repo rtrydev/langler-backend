@@ -368,6 +368,19 @@ func selectUncoveredFirst[T any](items []T, id func(T) string, covered map[strin
 	return selected
 }
 
+// instructionsInEnglish reports whether learner-facing exercise instructions
+// should be written in English rather than the target language: learners below
+// JLPT N3 / CEFR B1 cannot yet be expected to read instructions in the target
+// language.
+func instructionsInEnglish(language domain.Language, level domain.Level) bool {
+	threshold := domain.Level("B1")
+	if language == "ja" {
+		threshold = "N3"
+	}
+	levels := domain.LevelsFor(language)
+	return slices.Index(levels, level) < slices.Index(levels, threshold)
+}
+
 func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar []reference.GrammarTopic, pool bool) string {
 	var b strings.Builder
 	levelLabel := string(request.level)
@@ -501,6 +514,11 @@ func composePrompt(request promptRequest, vocab []reference.VocabEntry, grammar 
 	}
 	fmt.Fprintf(&b, "## Constraints\n")
 	fmt.Fprintf(&b, "- Plain text only in every string: no HTML, no markdown, no control characters.\n")
+	if instructionsInEnglish(request.language, request.level) {
+		fmt.Fprintf(&b, "- A %s learner cannot yet read instructions in %s: write every exercise \"prompt\", every cloze \"hint\", and any writing_prompt \"guidance\" in English. The material being practiced (passages, cloze texts, questions, matching pairs, ordering items, answers, glyphs) stays in %s as specified above.\n", levelLabel, languageNames[request.language], languageNames[request.language])
+	} else {
+		fmt.Fprintf(&b, "- Write every exercise \"prompt\" in %s, phrased simply enough for a %s learner; use English only where an instruction cannot be made unambiguous at this level.\n", languageNames[request.language], levelLabel)
+	}
 	if request.language == "ja" {
 		fmt.Fprintf(&b, "- All Japanese content (cloze texts, reading passages, translation sources, ordering items, practice glyphs) must be written in Japanese script.\n")
 	}
