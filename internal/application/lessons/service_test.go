@@ -682,6 +682,44 @@ func TestBuildConnectedPromptIncludesStoryAndReference(t *testing.T) {
 	}
 }
 
+func TestBuildPromptInstructionLanguageFollowsLevel(t *testing.T) {
+	t.Parallel()
+
+	svc := newService(t, &fakeStore{}, &fakeChecker{}, &fakeReader{})
+	cases := []struct {
+		language string
+		level    string
+		english  bool
+	}{
+		{"ja", "N5", true},
+		{"ja", "N4", true},
+		{"ja", "N3", false},
+		{"ja", "N1", false},
+		{"pl", "A1", true},
+		{"pl", "A2", true},
+		{"pl", "B1", false},
+		{"my", "C2", false},
+	}
+	for _, tc := range cases {
+		result, err := svc.Build(context.Background(), inbound.LessonPromptQuery{
+			Language:      tc.language,
+			Level:         tc.level,
+			ExerciseTypes: []string{"cloze"},
+		})
+		if err != nil {
+			t.Fatalf("Build(%s %s): %v", tc.language, tc.level, err)
+		}
+		hasEnglish := strings.Contains(result.Prompt, `"guidance" in English`)
+		if hasEnglish != tc.english {
+			t.Errorf("%s %s: English instructions directive = %v, want %v", tc.language, tc.level, hasEnglish, tc.english)
+		}
+		hasTarget := strings.Contains(result.Prompt, "phrased simply enough for a")
+		if hasTarget == tc.english {
+			t.Errorf("%s %s: target-language instructions directive = %v, want %v", tc.language, tc.level, hasTarget, !tc.english)
+		}
+	}
+}
+
 func TestBuildPromptDescribesOnlySelectedExerciseTypes(t *testing.T) {
 	t.Parallel()
 
