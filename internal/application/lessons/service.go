@@ -15,6 +15,9 @@ import (
 const (
 	defaultLimit = 50
 	maxLimit     = 200
+
+	defaultCompletionLimit = 10
+	maxCompletionLimit     = 50
 )
 
 type Service struct {
@@ -215,7 +218,59 @@ func (s *Service) List(ctx context.Context, query inbound.LessonListQuery) (inbo
 	for _, record := range page.Records {
 		lessons = append(lessons, storedLesson(record))
 	}
-	return inbound.LessonListResult{Lessons: lessons, NextCursor: page.NextCursor}, nil
+	completions, err := s.results.ListCompletions(ctx, query.Owner)
+	if err != nil {
+		return inbound.LessonListResult{}, err
+	}
+	return inbound.LessonListResult{Lessons: lessons, Completions: summarizeCompletions(completions), NextCursor: page.NextCursor}, nil
+}
+
+func summarizeCompletions(completions []outbound.Completion) map[string]inbound.LessonCompletionSummary {
+	if len(completions) == 0 {
+		return nil
+	}
+	summaries := make(map[string]inbound.LessonCompletionSummary)
+	for _, completion := range completions {
+		summary := summaries[completion.LessonID]
+		summary.Count++
+		if completion.CompletedAt.After(summary.LastCompletedAt) {
+			summary.LastCompletedAt = completion.CompletedAt
+			summary.LastScore = completion.Score
+			summary.LastMaxScore = completion.MaxScore
+		}
+		summaries[completion.LessonID] = summary
+	}
+	return summaries
+}
+
+func (s *Service) Completions(ctx context.Context, query inbound.LessonCompletionsQuery) (inbound.LessonCompletionsResult, error) {
+	if query.Owner == "" {
+		return inbound.LessonCompletionsResult{}, domain.ErrInvalidOwner
+	}
+	if !domain.ValidID(query.ID) {
+		return inbound.LessonCompletionsResult{}, domain.ErrInvalidLessonID
+	}
+	if _, err := s.store.Get(ctx, query.Owner, query.ID); err != nil {
+		return inbound.LessonCompletionsResult{}, err
+	}
+	limit := query.Limit
+	if limit <= 0 {
+		limit = defaultCompletionLimit
+	}
+	completions, err := s.results.ListResults(ctx, query.Owner, query.ID, min(limit, maxCompletionLimit))
+	if err != nil {
+		return inbound.LessonCompletionsResult{}, err
+	}
+	items := make([]inbound.LessonCompletion, 0, len(completions))
+	for _, completion := range completions {
+		items = append(items, inbound.LessonCompletion{
+			AttemptID:   completion.AttemptID,
+			CompletedAt: completion.CompletedAt,
+			Score:       completion.Score,
+			MaxScore:    completion.MaxScore,
+		})
+	}
+	return inbound.LessonCompletionsResult{Completions: items}, nil
 }
 
 func (s *Service) Get(ctx context.Context, query inbound.LessonQuery) (inbound.StoredLesson, error) {

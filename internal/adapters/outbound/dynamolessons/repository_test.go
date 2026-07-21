@@ -225,3 +225,75 @@ func TestSaveIdempotentRejectsChangedContent(t *testing.T) {
 		t.Fatalf("changed replay error = %v, want %v", err, domain.ErrIdempotencyConflict)
 	}
 }
+
+func TestResultHistoryQueries(t *testing.T) {
+	client := localClient(t)
+	table := createTable(t, client)
+	repo, err := dynamolessons.NewRepository(client, table)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	ctx := context.Background()
+
+	const lessonA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	const lessonB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	attempts := []struct {
+		lessonID  string
+		attemptID string
+		day       int
+		score     int
+	}{
+		{lessonA, "a-1", 10, 4},
+		{lessonA, "a-2", 12, 6},
+		{lessonA, "a-3", 19, 8},
+		{lessonB, "b-1", 15, 3},
+	}
+	for _, attempt := range attempts {
+		completedAt := time.Date(2026, 7, attempt.day, 9, 30, 0, 0, time.UTC)
+		err := repo.SaveResult(ctx, outbound.ResultRecord{Owner: "user-1", Result: domain.Result{
+			AttemptID:   attempt.attemptID,
+			LessonID:    attempt.lessonID,
+			StartedAt:   completedAt.Add(-10 * time.Minute),
+			CompletedAt: completedAt,
+			Score:       attempt.score,
+			MaxScore:    8,
+		}})
+		if err != nil {
+			t.Fatalf("SaveResult %s: %v", attempt.attemptID, err)
+		}
+	}
+
+	recent, err := repo.ListResults(ctx, "user-1", lessonA, 2)
+	if err != nil {
+		t.Fatalf("ListResults: %v", err)
+	}
+	if len(recent) != 2 || recent[0].AttemptID != "a-3" || recent[1].AttemptID != "a-2" {
+		t.Errorf("ListResults = %+v, want a-3 then a-2", recent)
+	}
+	if recent[0].Score != 8 || recent[0].MaxScore != 8 || !recent[0].CompletedAt.Equal(time.Date(2026, 7, 19, 9, 30, 0, 0, time.UTC)) {
+		t.Errorf("latest completion = %+v", recent[0])
+	}
+
+	all, err := repo.ListCompletions(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("ListCompletions: %v", err)
+	}
+	if len(all) != 4 {
+		t.Errorf("ListCompletions = %d records, want 4", len(all))
+	}
+	byLesson := map[string]int{}
+	for _, completion := range all {
+		byLesson[completion.LessonID]++
+	}
+	if byLesson[lessonA] != 3 || byLesson[lessonB] != 1 {
+		t.Errorf("byLesson = %v", byLesson)
+	}
+
+	other, err := repo.ListCompletions(ctx, "user-2")
+	if err != nil {
+		t.Fatalf("ListCompletions user-2: %v", err)
+	}
+	if len(other) != 0 {
+		t.Errorf("cross-owner completions = %+v, want none", other)
+	}
+}

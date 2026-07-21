@@ -69,11 +69,13 @@ func (f *fakeLessonImporter) Import(_ context.Context, command inbound.LessonImp
 }
 
 type fakeLessonLibrary struct {
-	list      inbound.LessonListResult
-	stored    inbound.StoredLesson
-	err       error
-	listQuery inbound.LessonListQuery
-	query     inbound.LessonQuery
+	list             inbound.LessonListResult
+	stored           inbound.StoredLesson
+	completions      inbound.LessonCompletionsResult
+	err              error
+	listQuery        inbound.LessonListQuery
+	query            inbound.LessonQuery
+	completionsQuery inbound.LessonCompletionsQuery
 }
 
 func (f *fakeLessonLibrary) List(_ context.Context, query inbound.LessonListQuery) (inbound.LessonListResult, error) {
@@ -89,6 +91,11 @@ func (f *fakeLessonLibrary) Get(_ context.Context, query inbound.LessonQuery) (i
 func (f *fakeLessonLibrary) Delete(_ context.Context, query inbound.LessonQuery) error {
 	f.query = query
 	return f.err
+}
+
+func (f *fakeLessonLibrary) Completions(_ context.Context, query inbound.LessonCompletionsQuery) (inbound.LessonCompletionsResult, error) {
+	f.completionsQuery = query
+	return f.completions, f.err
 }
 
 type fakeLessonPromptBuilder struct {

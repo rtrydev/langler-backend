@@ -423,3 +423,130 @@ func TestLessonPromptForwardsOwnerAndTopicSlug(t *testing.T) {
 		t.Fatalf("query = %+v", prompts.query)
 	}
 }
+
+func TestHandleLessonCompletions(t *testing.T) {
+	t.Parallel()
+
+	const id = "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00"
+
+	t.Run("returns recent completions", func(t *testing.T) {
+		t.Parallel()
+
+		library := &fakeLessonLibrary{completions: inbound.LessonCompletionsResult{Completions: []inbound.LessonCompletion{
+			{AttemptID: "a-2", CompletedAt: time.Date(2026, 7, 19, 9, 30, 0, 0, time.UTC), Score: 7, MaxScore: 8},
+			{AttemptID: "a-1", CompletedAt: time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC), Score: 5, MaxScore: 8},
+		}}}
+		h := newLessonHandler(t, &fakeLessonImporter{}, library, &fakeLessonPromptBuilder{})
+		req := lessonRequest(http.MethodGet, "/lessons/"+id+"/results", "user-1", "")
+		req.QueryStringParameters = map[string]string{"limit": "2"}
+		resp, err := h.Handle(context.Background(), req)
+		if err != nil {
+			t.Fatalf("Handle: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("StatusCode = %d body %s", resp.StatusCode, resp.Body)
+		}
+		if library.completionsQuery.Owner != "user-1" || library.completionsQuery.ID != id || library.completionsQuery.Limit != 2 {
+			t.Errorf("query = %+v", library.completionsQuery)
+		}
+		var body struct {
+			Items []struct {
+				AttemptID   string `json:"attemptId"`
+				CompletedAt string `json:"completedAt"`
+				Score       int    `json:"score"`
+				MaxScore    int    `json:"maxScore"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(body.Items) != 2 || body.Items[0].AttemptID != "a-2" || body.Items[0].CompletedAt != "2026-07-19T09:30:00Z" || body.Items[0].Score != 7 {
+			t.Errorf("items = %+v", body.Items)
+		}
+	})
+
+	t.Run("rejects invalid limit", func(t *testing.T) {
+		t.Parallel()
+
+		h := newLessonHandler(t, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
+		req := lessonRequest(http.MethodGet, "/lessons/"+id+"/results", "user-1", "")
+		req.QueryStringParameters = map[string]string{"limit": "nope"}
+		resp, _ := h.Handle(context.Background(), req)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("StatusCode = %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("maps missing lesson to 404", func(t *testing.T) {
+		t.Parallel()
+
+		library := &fakeLessonLibrary{err: lesson.ErrNotFound}
+		h := newLessonHandler(t, &fakeLessonImporter{}, library, &fakeLessonPromptBuilder{})
+		resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodGet, "/lessons/"+id+"/results", "user-1", ""))
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("StatusCode = %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("requires authenticated user", func(t *testing.T) {
+		t.Parallel()
+
+		h := newLessonHandler(t, &fakeLessonImporter{}, &fakeLessonLibrary{}, &fakeLessonPromptBuilder{})
+		resp, _ := h.Handle(context.Background(), lessonRequest(http.MethodGet, "/lessons/"+id+"/results", "", ""))
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("StatusCode = %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestHandleLessonListIncludesCompletionSummary(t *testing.T) {
+	t.Parallel()
+
+	const id = "3e2d5f6a-9d0b-4c1e-8a7f-2b6c9d3e1f00"
+	library := &fakeLessonLibrary{list: inbound.LessonListResult{
+		Lessons: []inbound.StoredLesson{
+			{
+				CreatedAt: time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC),
+				Lesson: lesson.Lesson{
+					ID:           id,
+					Language:     "ja",
+					Level:        "N4",
+					Title:        "Weekend plans in Kyoto",
+					ReadingStage: lesson.StageConnected,
+				},
+			},
+		},
+		Completions: map[string]inbound.LessonCompletionSummary{
+			id: {Count: 3, LastCompletedAt: time.Date(2026, 7, 19, 9, 30, 0, 0, time.UTC), LastScore: 7, LastMaxScore: 8},
+		},
+	}}
+	h := newLessonHandler(t, &fakeLessonImporter{}, library, &fakeLessonPromptBuilder{})
+	resp, err := h.Handle(context.Background(), lessonRequest(http.MethodGet, "/lessons", "user-1", ""))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d body %s", resp.StatusCode, resp.Body)
+	}
+	var body struct {
+		Items []struct {
+			LessonID   string `json:"lessonId"`
+			Completion *struct {
+				Count           int    `json:"count"`
+				LastCompletedAt string `json:"lastCompletedAt"`
+				LastScore       int    `json:"lastScore"`
+				LastMaxScore    int    `json:"lastMaxScore"`
+			} `json:"completion"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Completion == nil {
+		t.Fatalf("items = %+v", body.Items)
+	}
+	completion := body.Items[0].Completion
+	if completion.Count != 3 || completion.LastCompletedAt != "2026-07-19T09:30:00Z" || completion.LastScore != 7 || completion.LastMaxScore != 8 {
+		t.Errorf("completion = %+v", completion)
+	}
+}

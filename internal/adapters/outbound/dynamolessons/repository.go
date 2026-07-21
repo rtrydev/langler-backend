@@ -237,6 +237,79 @@ func (r *Repository) SaveResult(ctx context.Context, record outbound.ResultRecor
 	return nil
 }
 
+var completionAttributeNames = map[string]string{
+	"#attemptId":   "attemptId",
+	"#lessonId":    "lessonId",
+	"#completedAt": "completedAt",
+	"#score":       "score",
+	"#maxScore":    "maxScore",
+}
+
+func completionQuery(table, owner, skPrefix string) *dynamodb.QueryInput {
+	return &dynamodb.QueryInput{
+		TableName:              aws.String(table),
+		KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk": &types.AttributeValueMemberS{Value: "USER#" + owner},
+			":sk": &types.AttributeValueMemberS{Value: skPrefix},
+		},
+		ProjectionExpression:     aws.String("#attemptId, #lessonId, #completedAt, #score, #maxScore"),
+		ExpressionAttributeNames: completionAttributeNames,
+	}
+}
+
+func (r *Repository) ListResults(ctx context.Context, owner, lessonID string, limit int) ([]outbound.Completion, error) {
+	input := completionQuery(r.table, owner, "RESULT#"+lessonID+"#")
+	input.ScanIndexForward = aws.Bool(false)
+	input.Limit = aws.Int32(int32(limit))
+	out, err := r.client.Query(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("%w: query results: %v", domain.ErrStorageFailure, err)
+	}
+	return toCompletions(out.Items)
+}
+
+func (r *Repository) ListCompletions(ctx context.Context, owner string) ([]outbound.Completion, error) {
+	var completions []outbound.Completion
+	var startKey map[string]types.AttributeValue
+	for {
+		input := completionQuery(r.table, owner, "RESULT#")
+		input.ExclusiveStartKey = startKey
+		out, err := r.client.Query(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("%w: query completions: %v", domain.ErrStorageFailure, err)
+		}
+		page, err := toCompletions(out.Items)
+		if err != nil {
+			return nil, err
+		}
+		completions = append(completions, page...)
+		if out.LastEvaluatedKey == nil {
+			return completions, nil
+		}
+		startKey = out.LastEvaluatedKey
+	}
+}
+
+func toCompletions(items []map[string]types.AttributeValue) ([]outbound.Completion, error) {
+	var records []completionItem
+	if err := attributevalue.UnmarshalListOfMaps(items, &records); err != nil {
+		return nil, fmt.Errorf("%w: unmarshal completions: %v", domain.ErrStorageFailure, err)
+	}
+	completions := make([]outbound.Completion, 0, len(records))
+	for _, record := range records {
+		completedAt, _ := time.Parse(time.RFC3339Nano, record.CompletedAt)
+		completions = append(completions, outbound.Completion{
+			AttemptID:   record.AttemptID,
+			LessonID:    record.LessonID,
+			CompletedAt: completedAt,
+			Score:       record.Score,
+			MaxScore:    record.MaxScore,
+		})
+	}
+	return completions, nil
+}
+
 func lessonKey(owner, id string) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{
 		"PK": &types.AttributeValueMemberS{Value: "USER#" + owner},

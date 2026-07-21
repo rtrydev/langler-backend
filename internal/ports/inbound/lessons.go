@@ -34,9 +34,17 @@ type LessonListQuery struct {
 	Cursor string
 }
 
+type LessonCompletionSummary struct {
+	Count           int
+	LastCompletedAt time.Time
+	LastScore       int
+	LastMaxScore    int
+}
+
 type LessonListResult struct {
-	Lessons    []StoredLesson
-	NextCursor string
+	Lessons     []StoredLesson
+	Completions map[string]LessonCompletionSummary
+	NextCursor  string
 }
 
 type LessonQuery struct {
@@ -44,10 +52,28 @@ type LessonQuery struct {
 	ID    string
 }
 
+type LessonCompletionsQuery struct {
+	Owner string
+	ID    string
+	Limit int
+}
+
+type LessonCompletion struct {
+	AttemptID   string
+	CompletedAt time.Time
+	Score       int
+	MaxScore    int
+}
+
+type LessonCompletionsResult struct {
+	Completions []LessonCompletion
+}
+
 type LessonLibrary interface {
 	List(ctx context.Context, query LessonListQuery) (LessonListResult, error)
 	Get(ctx context.Context, query LessonQuery) (StoredLesson, error)
 	Delete(ctx context.Context, query LessonQuery) error
+	Completions(ctx context.Context, query LessonCompletionsQuery) (LessonCompletionsResult, error)
 }
 
 type LessonPromptQuery struct {

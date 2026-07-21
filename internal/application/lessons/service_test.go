@@ -16,15 +16,17 @@ import (
 )
 
 type fakeStore struct {
-	saved   []outbound.LessonRecord
-	saveErr error
-	record  outbound.LessonRecord
-	getErr  error
-	page    outbound.LessonPage
-	listErr error
-	deleted []string
-	delErr  error
-	results []outbound.ResultRecord
+	saved       []outbound.LessonRecord
+	saveErr     error
+	record      outbound.LessonRecord
+	getErr      error
+	page        outbound.LessonPage
+	listErr     error
+	deleted     []string
+	delErr      error
+	results     []outbound.ResultRecord
+	completions []outbound.Completion
+	resultsErr  error
 }
 
 func (f *fakeStore) Save(_ context.Context, record outbound.LessonRecord) error {
@@ -71,6 +73,26 @@ func (f *fakeStore) Delete(_ context.Context, _, id string) error {
 func (f *fakeStore) SaveResult(_ context.Context, record outbound.ResultRecord) error {
 	f.results = append(f.results, record)
 	return nil
+}
+
+func (f *fakeStore) ListResults(_ context.Context, _, lessonID string, limit int) ([]outbound.Completion, error) {
+	if f.resultsErr != nil {
+		return nil, f.resultsErr
+	}
+	var matched []outbound.Completion
+	for _, completion := range f.completions {
+		if completion.LessonID == lessonID && len(matched) < limit {
+			matched = append(matched, completion)
+		}
+	}
+	return matched, nil
+}
+
+func (f *fakeStore) ListCompletions(_ context.Context, _ string) ([]outbound.Completion, error) {
+	if f.resultsErr != nil {
+		return nil, f.resultsErr
+	}
+	return f.completions, nil
 }
 
 type fakeChecker struct {
@@ -771,5 +793,118 @@ func TestBuildRejectsUnknownParameters(t *testing.T) {
 	}
 	if !paths["language"] || !paths["exerciseTypes[1]"] {
 		t.Errorf("issues = %v, want language and exerciseTypes[1]", validation.Issues)
+	}
+}
+
+func TestListIncludesCompletionSummaries(t *testing.T) {
+	t.Parallel()
+
+	l := validLesson()
+	store := &fakeStore{
+		page: outbound.LessonPage{Records: []outbound.LessonRecord{{Owner: "user-1", Lesson: l}}},
+		completions: []outbound.Completion{
+			{AttemptID: "a-1", LessonID: l.ID, CompletedAt: time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC), Score: 5, MaxScore: 8},
+			{AttemptID: "a-2", LessonID: l.ID, CompletedAt: time.Date(2026, 7, 19, 9, 0, 0, 0, time.UTC), Score: 7, MaxScore: 8},
+		},
+	}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	result, err := svc.List(context.Background(), inbound.LessonListQuery{Owner: "user-1"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	summary, ok := result.Completions[l.ID]
+	if !ok {
+		t.Fatalf("Completions = %v, want entry for %s", result.Completions, l.ID)
+	}
+	if summary.Count != 2 || summary.LastScore != 7 || summary.LastMaxScore != 8 {
+		t.Errorf("summary = %+v", summary)
+	}
+	if !summary.LastCompletedAt.Equal(time.Date(2026, 7, 19, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("LastCompletedAt = %v", summary.LastCompletedAt)
+	}
+}
+
+func TestListWithoutCompletionsHasNoSummaries(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{page: outbound.LessonPage{Records: []outbound.LessonRecord{{Owner: "user-1", Lesson: validLesson()}}}}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	result, err := svc.List(context.Background(), inbound.LessonListQuery{Owner: "user-1"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(result.Completions) != 0 {
+		t.Errorf("Completions = %v, want none", result.Completions)
+	}
+}
+
+func TestCompletionsReturnsPerLessonHistory(t *testing.T) {
+	t.Parallel()
+
+	l := validLesson()
+	store := &fakeStore{
+		record: outbound.LessonRecord{Owner: "user-1", Lesson: l},
+		completions: []outbound.Completion{
+			{AttemptID: "a-2", LessonID: l.ID, CompletedAt: time.Date(2026, 7, 19, 9, 0, 0, 0, time.UTC), Score: 7, MaxScore: 8},
+			{AttemptID: "a-1", LessonID: l.ID, CompletedAt: time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC), Score: 5, MaxScore: 8},
+			{AttemptID: "b-1", LessonID: "ffffffff-ffff-4fff-8fff-ffffffffffff", CompletedAt: time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC), Score: 3, MaxScore: 4},
+		},
+	}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+	result, err := svc.Completions(context.Background(), inbound.LessonCompletionsQuery{Owner: "user-1", ID: l.ID})
+	if err != nil {
+		t.Fatalf("Completions: %v", err)
+	}
+	if len(result.Completions) != 2 {
+		t.Fatalf("completions = %+v, want 2", result.Completions)
+	}
+	if result.Completions[0].AttemptID != "a-2" || result.Completions[0].Score != 7 {
+		t.Errorf("first completion = %+v", result.Completions[0])
+	}
+}
+
+func TestCompletionsClampsLimit(t *testing.T) {
+	t.Parallel()
+
+	l := validLesson()
+	var completions []outbound.Completion
+	for range 60 {
+		completions = append(completions, outbound.Completion{LessonID: l.ID, CompletedAt: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)})
+	}
+	store := &fakeStore{record: outbound.LessonRecord{Owner: "user-1", Lesson: l}, completions: completions}
+	svc := newService(t, store, &fakeChecker{}, &fakeReader{})
+
+	result, err := svc.Completions(context.Background(), inbound.LessonCompletionsQuery{Owner: "user-1", ID: l.ID})
+	if err != nil {
+		t.Fatalf("Completions: %v", err)
+	}
+	if len(result.Completions) != 10 {
+		t.Errorf("default limit returned %d, want 10", len(result.Completions))
+	}
+
+	result, err = svc.Completions(context.Background(), inbound.LessonCompletionsQuery{Owner: "user-1", ID: l.ID, Limit: 200})
+	if err != nil {
+		t.Fatalf("Completions: %v", err)
+	}
+	if len(result.Completions) != 50 {
+		t.Errorf("capped limit returned %d, want 50", len(result.Completions))
+	}
+}
+
+func TestCompletionsValidatesQuery(t *testing.T) {
+	t.Parallel()
+
+	l := validLesson()
+	svc := newService(t, &fakeStore{record: outbound.LessonRecord{Owner: "user-1", Lesson: l}}, &fakeChecker{}, &fakeReader{})
+	if _, err := svc.Completions(context.Background(), inbound.LessonCompletionsQuery{ID: l.ID}); !errors.Is(err, domain.ErrInvalidOwner) {
+		t.Errorf("missing owner error = %v, want ErrInvalidOwner", err)
+	}
+	if _, err := svc.Completions(context.Background(), inbound.LessonCompletionsQuery{Owner: "user-1", ID: "nope"}); !errors.Is(err, domain.ErrInvalidLessonID) {
+		t.Errorf("bad id error = %v, want ErrInvalidLessonID", err)
+	}
+
+	missing := newService(t, &fakeStore{getErr: domain.ErrNotFound}, &fakeChecker{}, &fakeReader{})
+	if _, err := missing.Completions(context.Background(), inbound.LessonCompletionsQuery{Owner: "user-1", ID: l.ID}); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("missing lesson error = %v, want ErrNotFound", err)
 	}
 }

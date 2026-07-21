@@ -36,8 +36,18 @@ type ResultRecord struct {
 	Result lesson.Result
 }
 
+type Completion struct {
+	AttemptID   string
+	LessonID    string
+	CompletedAt time.Time
+	Score       int
+	MaxScore    int
+}
+
 type ResultStore interface {
 	SaveResult(ctx context.Context, record ResultRecord) error
+	ListResults(ctx context.Context, owner, lessonID string, limit int) ([]Completion, error)
+	ListCompletions(ctx context.Context, owner string) ([]Completion, error)
 }
 
 type ReferenceChecker interface {
