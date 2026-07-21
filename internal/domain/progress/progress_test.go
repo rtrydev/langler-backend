@@ -91,6 +91,30 @@ func TestScheduleCapsTheInterval(t *testing.T) {
 	}
 }
 
+func TestScheduleCapsTheEaseFactor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	item, err := progress.NewItem(progress.Item{
+		ID: "N4#1416220", Language: "ja", Kind: progress.KindVocab,
+		Headword: "週末", Gloss: "weekend",
+		EaseFactor: 2.95, IntervalDays: 10, Repetitions: 5,
+	}, now)
+	if err != nil {
+		t.Fatalf("NewItem: %v", err)
+	}
+
+	for range 3 {
+		item, err = progress.Schedule(item, progress.GradeEasy, item.DueDate.Add(12*time.Hour), item.DueDate)
+		if err != nil {
+			t.Fatalf("Schedule: %v", err)
+		}
+		if item.EaseFactor != 3.0 {
+			t.Fatalf("EaseFactor = %v, want the 3.0 cap", item.EaseFactor)
+		}
+	}
+}
+
 func TestGradePerformance(t *testing.T) {
 	t.Parallel()
 

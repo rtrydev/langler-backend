@@ -20,6 +20,10 @@ var (
 // eventually overflows the four-digit year RFC 3339 storage can round-trip.
 const MaxIntervalDays = 365
 
+// maxEaseFactor bounds the ease factor the same way 1.3 floors it; easy
+// reviews add 0.1 each, which would otherwise grow it without limit.
+const maxEaseFactor = 3.0
+
 type ItemKind string
 
 const (
@@ -150,6 +154,7 @@ func Schedule(item Item, grade Grade, reviewedAt, reviewedOn time.Time) (Item, e
 		item.EaseFactor += 0.1
 	}
 	item.IntervalDays = min(item.IntervalDays, MaxIntervalDays)
+	item.EaseFactor = min(item.EaseFactor, maxEaseFactor)
 
 	if reviewedOn.IsZero() {
 		reviewedOn = reviewedAt
